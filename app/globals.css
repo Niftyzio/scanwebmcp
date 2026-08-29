@@ -117,6 +117,23 @@ th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color
 .cta { margin-top: 3rem; padding: 1.3rem; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
 .cta h2 { margin-top: 0; }
 
+.agent-eyes { margin: 2.2rem 0; }
+.buyer-ask {
+  font-size: 1.05rem; font-style: italic; background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px; padding: 0.9rem 1.1rem;
+}
+.speaker { font-style: normal; font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); display: block; margin-bottom: 0.3rem; }
+.dialogue-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+@media (max-width: 640px) { .dialogue-grid { grid-template-columns: 1fr; } }
+.dialogue { border: 1px solid var(--line); border-radius: 10px; padding: 0.9rem 1.1rem; background: var(--card); }
+.dialogue.future { border-color: var(--accent); }
+.dialogue h3 { margin: 0 0 0.6rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.dialogue .line { margin: 0.55rem 0; font-size: 0.95rem; }
+.line.bad > span:first-child { color: #c0453a; font-weight: 700; }
+.line.good > span:first-child { color: var(--accent); font-weight: 700; }
+.evidence-link { font-size: 0.75rem; font-family: var(--mono); opacity: 0.7; }
+.prompt-preview { max-height: 14rem; overflow: auto; white-space: pre-wrap; }
+
 @media (max-width: 480px) {
   h1 { font-size: 1.55rem; }
   .site-header nav { gap: 0.7rem; }

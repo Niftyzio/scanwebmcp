@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { getScanPage } from "@/lib/scan-service";
 import WebMCPTools from "@/components/WebMCPTools";
 import RescanButton from "@/components/RescanButton";
+import PromptPack from "@/components/PromptPack";
+import { buildAgentView } from "@/lib/agent-view";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +76,8 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         Sector percentiles arrive with the benchmark corpus; today&apos;s result is the rung and the
         evidence behind it.
       </p>
+
+      <AgentEyes domain={domain} signals={signals} />
 
       <section aria-labelledby="opps">
         <h2 id="opps">The three opportunities most worth taking</h2>
@@ -152,10 +156,14 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
       <section className="cta">
         <h2>Take it further</h2>
         <p>
-          Copy this into your own AI assistant, or open this page in ChatGPT&apos;s desktop browser
-          and ask it to walk you through the findings — this page registers tools it can call.
+          Take these findings to your own AI assistant — the prompt below carries them, with the
+          evidence URLs. Or open this page in ChatGPT&apos;s desktop browser and ask it to walk you
+          through the findings: this page registers tools it can call.
         </p>
-        <RescanButton domain={domain} />
+        <PromptPack prompt={buildPrompt(domain, RUNGS[rung], scan.rubric_version, opportunities, slug)} />
+        <p style={{ marginTop: "1rem" }}>
+          <RescanButton domain={domain} />
+        </p>
       </section>
     </main>
   );
@@ -164,4 +172,67 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
 /** Render our own `**bold** — text` template strings as React nodes — no HTML injection. */
 function renderOpp(md: string): React.ReactNode {
   return md.split(/\*\*/).map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+}
+
+/** The buyer's-agent scene — signals translated into the conversation the owner will actually meet. */
+function AgentEyes({
+  domain,
+  signals,
+}: {
+  domain: string;
+  signals: { signal_key: string; value_bool: boolean | null; value_num: number | null; value_text: string | null }[];
+}) {
+  const view = buildAgentView(domain, signals);
+  return (
+    <section aria-labelledby="agent-eyes" className="agent-eyes">
+      <h2 id="agent-eyes">Through a buyer&apos;s agent&apos;s eyes</h2>
+      <p className="muted small">
+        This is not a metaphor. Assistants are asked questions like this every day; every line below
+        rests on a signal in the evidence section.
+      </p>
+      <p className="buyer-ask">
+        <span className="speaker">A buyer, to their AI assistant:</span> &ldquo;{view.buyerAsk}&rdquo;
+      </p>
+      <div className="dialogue-grid">
+        <div className="dialogue today">
+          <h3>The assistant, today</h3>
+          {view.today.map((l, i) => (
+            <p key={i} className={l.ok === false ? "line bad" : l.ok ? "line good" : "line"}>
+              <span aria-hidden="true">{l.ok === false ? "✗" : l.ok ? "✓" : "·"}</span> {l.text}{" "}
+              {l.signalKey && (
+                <a className="evidence-link" href={`#evidence-${l.signalKey}`} title="See the evidence">
+                  evidence
+                </a>
+              )}
+            </p>
+          ))}
+        </div>
+        <div className="dialogue future">
+          <h3>The assistant, after the three opportunities below</h3>
+          {view.withTools.map((l, i) => (
+            <p key={i} className={l.ok ? "line good" : "line"}>
+              <span aria-hidden="true">{l.ok ? "✓" : "·"}</span> {l.text}
+            </p>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function buildPrompt(
+  domain: string,
+  rungName: string,
+  rubricVersion: string,
+  opportunities: { rank: number; rendered_text: string }[],
+  slug: string,
+): string {
+  return `My website ${domain} was scanned with the Agent Surface Scan (Agent Surface Ladder v${rubricVersion}, by Sara Simeone / Agentic Sara). Verdict: ${rungName} on the ladder Invisible → Readable → Answerable → Callable → Transactable.
+
+The three evidenced opportunities, ranked by impact × ease:
+${opportunities.map((o) => `${o.rank}. ${o.rendered_text.replace(/\*\*/g, "")}`).join("\n")}
+
+Act as my implementation partner. For each opportunity: tell me exactly what to change on my site, in what order, and draft the artefacts (robots.txt lines, an llms.txt, schema.org markup, a WebMCP registerTool sketch for my main form). Explain each in plain language first.
+
+The full evidence for every finding is on the live result page — fetch it before advising me: https://agentsurfacescan.com/scan/${slug}`;
 }
