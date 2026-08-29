@@ -60,6 +60,31 @@ export function buildAgentView(domain: string, signalsIn: SignalLike[]): AgentVi
 
   const today: DialogueLine[] = [];
 
+  // Degraded scan — the wall is the whole story; invent nothing beyond it.
+  if (get("agent_access_blocked")?.bool === true) {
+    today.push({
+      ok: false,
+      text: `I couldn't see ${domain} at all. Their security system decided I was a robot — which I am — and showed me a challenge page instead of their site. Everything you asked me, I'd have to answer from other sources or not at all.`,
+      signalKey: "agent_access_blocked",
+    });
+    if (blockedBots.length > 0) {
+      today.push({
+        ok: false,
+        text: `Their robots.txt separately tells AI crawlers to stay away, so this looks like policy, not accident.`,
+        signalKey: "robots_gptbot",
+      });
+    }
+    return {
+      buyerAsk: `Find me a business like ${domain}, tell me what they'd charge for someone like me, and get me booked in if they're good.`,
+      today,
+      withTools: [
+        { ok: true, text: `Their site lets verified assistants through the firewall, so I can actually read who they are and who they serve.` },
+        { ok: true, text: `From there, published terms and a callable enquiry tool would take them the rest of the way — but the wall comes down first.` },
+        { ok: null, text: `One firewall rule stands between them and every buyer who shops through an assistant.` },
+      ],
+    };
+  }
+
   // Beat 1 — can I even see them?
   if (blockedBots.length >= 3) {
     today.push({

@@ -45,6 +45,10 @@ export interface ScanResult {
   signals: Signal[];
   pagesScanned: string[];
   errors: string[];
+  /** True when the homepage could not be genuinely fetched (WAF challenge,
+   *  403, empty response). Signals below D1's reachability line were never
+   *  measured — a degraded scan must never present them as findings. */
+  degraded: boolean;
 }
 
 const AI_BOTS = ["GPTBot", "ClaudeBot", "Google-Extended", "PerplexityBot"] as const;
@@ -216,6 +220,25 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
   const asBrowser = await politeFetch(`${origin}/`, BROWSER_UA);
   if (!asBot.ok && !asBrowser.ok)
     errors.push(`Homepage unreachable (${asBot.error ?? asBot.status}).`);
+
+  // Bot-wall detection: a challenge page is not the site. Scoring it as
+  // content produced confidently wrong zeros (observed 29 Aug: Cloudflare
+  // "Just a moment..." on a 403 served to our production IP).
+  const challengeMarkers = /just a moment|attention required|access denied|are you a robot|cf-challenge|_cf_chl|captcha-delivery|px-captcha|incapsula/i;
+  const bothBlocked =
+    (!asBot.ok || challengeMarkers.test(asBot.body.slice(0, 3000))) &&
+    (!asBrowser.ok || challengeMarkers.test(asBrowser.body.slice(0, 3000)));
+  if (bothBlocked) {
+    signals.push({
+      dimension: "D1",
+      signalKey: "agent_access_blocked",
+      valueBool: true,
+      valueText: `http_${asBot.status}`,
+      evidenceUrl: `${origin}/`,
+      evidenceSnippet: snippet(asBot.body || asBrowser.body || `status ${asBot.status}`, 300),
+      observedAt: now(),
+    });
+  }
 
   const botIsHtml = looksLikeHtml(asBot.body);
   const botBytes = asBot.body.length;
@@ -588,6 +611,33 @@ export async function runScan(input: string): Promise<ScanResult> {
   const errors: string[] = [];
 
   const { html } = await checkD1(origin, signals, errors);
+  const degraded = signals.some((s) => s.signalKey === "agent_access_blocked" && s.valueBool);
+
+  if (degraded) {
+    // Do not fabricate D2–D5 measurements from a challenge page. What we CAN
+    // honestly report: reachability of the text files, robots verdicts, and
+    // the block itself — which for an agent is the finding.
+    const startedSignals = signals.filter((s) =>
+      ["robots_", "llms_", "sitemap_xml", "agent_access_blocked"].some((p) => s.signalKey.startsWith(p)),
+    );
+    signals.length = 0;
+    signals.push(...startedSignals);
+    await checkD3(origin, signals); // fixed-path probes still meaningful
+    return {
+      domain,
+      rubricVersion: RUBRIC_VERSION,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      rung: 0,
+      rungName: "Invisible",
+      scores: { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0, composite: 0 },
+      signals,
+      pagesScanned: [`${origin}/`],
+      errors: [...errors, "Scan degraded: the site served our agent a bot-challenge page instead of content. Unmeasured dimensions are reported as unmeasured, not zero."],
+      degraded: true,
+    };
+  }
+
   const pagesScanned = await checkPageSet(origin, html, signals);
   await checkD3(origin, signals);
 
@@ -603,5 +653,6 @@ export async function runScan(input: string): Promise<ScanResult> {
     signals,
     pagesScanned,
     errors,
+    degraded: false,
   };
 }

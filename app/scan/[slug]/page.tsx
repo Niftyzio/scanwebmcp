@@ -72,6 +72,14 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         <span className="domain">{domain}</span> is <strong>{RUNGS[rung]}</strong>
         <span className="muted"> — rung {rung} of 4 on the Agent Surface Ladder</span>
       </h1>
+      {signals.some((s) => s.signal_key === "agent_access_blocked" && s.value_bool) && (
+        <div className="degraded-note">
+          <strong>Partial scan.</strong> This site&apos;s security system served our agent a
+          bot-challenge page instead of content. We report only what was genuinely observed — the
+          block itself, robots.txt directives, and fixed-path probes. Dimensions we could not reach
+          are unmeasured, not zero. For an AI agent, of course, the wall <em>is</em> the experience.
+        </div>
+      )}
       <p className="muted small">
         Sector percentiles arrive with the benchmark corpus; today&apos;s result is the rung and the
         evidence behind it.

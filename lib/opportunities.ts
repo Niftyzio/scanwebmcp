@@ -29,6 +29,15 @@ interface Template {
 
 const TEMPLATES: Template[] = [
   {
+    key: "firewall_blocks_agents",
+    impact: 5,
+    ease: 4,
+    applies: (r) => sig(r, "agent_access_blocked")?.valueBool === true,
+    title: () => "Your security wall is turning away the agents your buyers send",
+    text: () =>
+      `When our scanner visited as an automated agent, your site served a bot-challenge page instead of content — and what happened to us happens to every AI assistant a potential client sends your way. The fix is usually one firewall rule: allow verified AI crawlers and agents (most WAFs, including Cloudflare, now have a one-toggle setting for this) while keeping protection for everything else.`,
+  },
+  {
     key: "unblock_agents",
     impact: 5,
     ease: 5,
@@ -84,8 +93,9 @@ const TEMPLATES: Template[] = [
     impact: 3,
     ease: 3,
     applies: (r) => {
-      const t = sig(r, "structured_data_types")?.valueText ?? "";
-      return !/Service|Offer|Product|FAQPage/.test(t);
+      const s = sig(r, "structured_data_types");
+      if (!s) return false; // not measured (degraded scan) — never claim it's missing
+      return !/Service|Offer|Product|FAQPage/.test(s.valueText ?? "");
     },
     title: () => "Your markup says who you are, not what you sell",
     text: (r) => {
