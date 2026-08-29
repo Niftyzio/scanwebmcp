@@ -51,6 +51,9 @@ export interface ScanResult {
    *  403, empty response). Signals below D1's reachability line were never
    *  measured — a degraded scan must never present them as findings. */
   degraded: boolean;
+  /** Where the business appears to be based, from its own pages (declared
+   *  address, phone prefix, postcode) with the domain ending as fallback. */
+  countryGuess: string | null;
 }
 
 const AI_BOTS = ["GPTBot", "ClaudeBot", "Google-Extended", "PerplexityBot"] as const;
@@ -440,69 +443,7 @@ async function checkPageSet(
     }
   }
 
-  // Content library — links into knowledge sections, a proxy for "this site
-  // knows a lot that an agent can only skim". Recorded but not scored in
-  // v1.0 (scoring it is a rubric-version change); feeds the content-library
-  // opportunity template.
-  const contentLinks = new Set(
-    [...homepageHtml.matchAll(/href=["']([^"'#?]+)["']/gi)]
-      .map((m) => m[1])
-      .filter((h) =>
-        /\/(insights?|blog|guides?|resources?|articles?|knowledge|case-stud|publications?|whitepapers?)(\/|$)/i.test(h),
-      ),
-  );
-  // Most sites expose the library through ONE nav link — follow it and count
-  // the articles on the index page itself.
-  let libraryCount = contentLinks.size;
-  let libraryUrl = `${origin}/`;
-  // Derive the section index from any content link — a deep link like
-  // /insights/2026/foo still tells us the library lives at /insights.
-  const sectionSeg = [...contentLinks]
-    .map((h) => {
-      try {
-        const path = new URL(h.startsWith("/") ? origin + h : h).pathname;
-        return path.split("/").filter(Boolean).find((seg) =>
-          /^(insights?|blog|guides?|resources?|articles?|knowledge|case-studies|publications?|whitepapers?|news)$/i.test(seg),
-        );
-      } catch {
-        return undefined;
-      }
-    })
-    .find(Boolean);
-  if (sectionSeg && libraryCount < 8) {
-    // The definitive count comes from the sitemap — it lists every URL even
-    // when the index page renders its list client-side (observed: a law
-    // firm's insights index with zero article links in raw HTML).
-    const CONTENT_PATH = /\/(insights?|blog|guides?|resources?|articles?|knowledge|case-studies|publications?|whitepapers?|news)\//i;
-    let sitemapBody = (await politeFetch(`${origin}/sitemap.xml`)).body;
-    if (/<sitemapindex/i.test(sitemapBody)) {
-      const children = [...sitemapBody.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
-      const preferred = children.find((u) => CONTENT_PATH.test(u)) ?? children[0];
-      if (preferred) sitemapBody = (await politeFetch(preferred)).body;
-    }
-    const contentUrls = [...sitemapBody.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)]
-      .map((m) => m[1])
-      .filter((u) => CONTENT_PATH.test(u));
-    if (contentUrls.length > libraryCount) {
-      libraryCount = contentUrls.length;
-      libraryUrl = `${origin}/sitemap.xml`;
-    }
-  }
-  signals.push({
-    dimension: "D2",
-    signalKey: "content_library_links",
-    valueNum: libraryCount,
-    valueText:
-      libraryCount >= 8
-        ? "substantial_library"
-        : sectionSeg
-          ? "section_exists_articles_not_enumerable" // nav points at a library, but neither raw pages nor the sitemap list its articles
-          : libraryCount > 0
-            ? "some_content"
-            : "none_detected",
-    evidenceUrl: libraryUrl,
-    observedAt: now(),
-  });
+  signals.push(await detectContentLibrary(origin, homepageHtml));
 
   // Signals over everything fetched
   const forms = (combinedHtml.match(/<form[\s>]/gi) ?? []).length;
@@ -566,6 +507,131 @@ async function checkPageSet(
   });
 
   return scanned;
+}
+
+// Content library — links into knowledge sections, a proxy for "this site
+// knows a lot that an agent can only skim". Recorded but not scored in
+// v1.0 (scoring it is a rubric-version change); feeds the content-library
+// opportunity templates. Exported so the corpus backfill can run it against
+// scans that predate the signal.
+export async function detectContentLibrary(
+  origin: string,
+  homepageHtml: string,
+): Promise<Signal> {
+  const contentLinks = new Set(
+    [...homepageHtml.matchAll(/href=["']([^"'#?]+)["']/gi)]
+      .map((m) => m[1])
+      .filter((h) =>
+        /\/(insights?|blog|guides?|resources?|articles?|knowledge|case-stud|publications?|whitepapers?)(\/|$)/i.test(h),
+      ),
+  );
+  // Most sites expose the library through ONE nav link — follow it and count
+  // the articles on the index page itself.
+  let libraryCount = contentLinks.size;
+  let libraryUrl = `${origin}/`;
+  // Derive the section index from any content link — a deep link like
+  // /insights/2026/foo still tells us the library lives at /insights.
+  const sectionSeg = [...contentLinks]
+    .map((h) => {
+      try {
+        const path = new URL(h.startsWith("/") ? origin + h : h).pathname;
+        return path.split("/").filter(Boolean).find((seg) =>
+          /^(insights?|blog|guides?|resources?|articles?|knowledge|case-studies|publications?|whitepapers?|news)$/i.test(seg),
+        );
+      } catch {
+        return undefined;
+      }
+    })
+    .find(Boolean);
+  if (sectionSeg && libraryCount < 8) {
+    // The definitive count comes from the sitemap — it lists every URL even
+    // when the index page renders its list client-side (observed: a law
+    // firm's insights index with zero article links in raw HTML).
+    const CONTENT_PATH = /\/(insights?|blog|guides?|resources?|articles?|knowledge|case-studies|publications?|whitepapers?|news)\//i;
+    let sitemapBody = (await politeFetch(`${origin}/sitemap.xml`)).body;
+    if (/<sitemapindex/i.test(sitemapBody)) {
+      const children = [...sitemapBody.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
+      const preferred = children.find((u) => CONTENT_PATH.test(u)) ?? children[0];
+      if (preferred) sitemapBody = (await politeFetch(preferred)).body;
+    }
+    const contentUrls = [...sitemapBody.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)]
+      .map((m) => m[1])
+      .filter((u) => CONTENT_PATH.test(u));
+    if (contentUrls.length > libraryCount) {
+      libraryCount = contentUrls.length;
+      libraryUrl = `${origin}/sitemap.xml`;
+    }
+  }
+  return {
+    dimension: "D2",
+    signalKey: "content_library_links",
+    valueNum: libraryCount,
+    valueText:
+      libraryCount >= 8
+        ? "substantial_library"
+        : sectionSeg
+          ? "section_exists_articles_not_enumerable" // nav points at a library, but neither raw pages nor the sitemap list its articles
+          : libraryCount > 0
+            ? "some_content"
+            : "none_detected",
+    evidenceUrl: libraryUrl,
+    observedAt: new Date().toISOString(),
+  };
+}
+
+/** Fetch a homepage the way the scanner does — for backfill scripts only. */
+export async function fetchHomepageForBackfill(origin: string) {
+  return politeFetch(`${origin}/`);
+}
+
+// ---------------------------------------------------------------------------
+// Country detection — from what the site itself says, most tangible first:
+// its declared address in structured data, then phone country prefix, then a
+// UK postcode in the page, then the domain ending. Generic endings (.com,
+// .ai, .dev) prove nothing and many UK businesses use them — so the page
+// evidence outranks the TLD. Unknown stays unknown.
+// ---------------------------------------------------------------------------
+
+const ADDRESS_COUNTRIES: Record<string, string> = {
+  gb: "UK", uk: "UK", "united kingdom": "UK", ie: "Ireland", ireland: "Ireland",
+  us: "US", usa: "US", "united states": "US", ca: "Canada", canada: "Canada",
+  au: "Australia", australia: "Australia", nz: "New Zealand", "new zealand": "New Zealand",
+  fr: "France", france: "France", de: "Germany", germany: "Germany",
+  it: "Italy", italy: "Italy", es: "Spain", spain: "Spain",
+  nl: "Netherlands", netherlands: "Netherlands",
+};
+
+const PHONE_PREFIXES: [RegExp, string][] = [
+  [/(?:\+|%2B|00)44[\s\d(]/, "UK"],
+  [/(?:\+|00)353[\s\d(]/, "Ireland"],
+  [/(?:\+|00)61[\s\d(]/, "Australia"],
+  [/(?:\+|00)64[\s\d(]/, "New Zealand"],
+  [/(?:\+|00)33[\s\d(]/, "France"],
+  [/(?:\+|00)49[\s\d(]/, "Germany"],
+  [/(?:\+|00)39[\s\d(]/, "Italy"],
+  [/(?:\+|00)34[\s\d(]/, "Spain"],
+  [/(?:\+|00)31[\s\d(]/, "Netherlands"],
+];
+
+const TLD_COUNTRIES: [RegExp, string][] = [
+  [/\.uk$/, "UK"], [/\.ie$/, "Ireland"], [/\.fr$/, "France"], [/\.de$/, "Germany"],
+  [/\.it$/, "Italy"], [/\.es$/, "Spain"], [/\.nl$/, "Netherlands"], [/\.au$/, "Australia"],
+  [/\.nz$/, "New Zealand"], [/\.ca$/, "Canada"], [/\.us$/, "US"],
+];
+
+export function detectCountry(html: string | null, domain: string): string | null {
+  if (html) {
+    const declared = html.match(/"addressCountry"\s*:\s*(?:\{[^}]*"name"\s*:\s*)?"([^"]{2,40})"/i);
+    if (declared) {
+      const mapped = ADDRESS_COUNTRIES[declared[1].trim().toLowerCase()];
+      if (mapped) return mapped;
+    }
+    for (const [re, country] of PHONE_PREFIXES) if (re.test(html)) return country;
+    // UK postcode (outcode + space + incode) — distinctive enough in page text.
+    if (/\b[A-Z]{1,2}\d[A-Z\d]?\s\d[A-Z]{2}\b/.test(html)) return "UK";
+  }
+  const d = domain.toLowerCase();
+  return TLD_COUNTRIES.find(([re]) => re.test(d))?.[1] ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -764,6 +830,7 @@ export async function runScan(input: string, scoring?: ScoringConfig): Promise<S
       pagesScanned: [`${origin}/`],
       errors: [...errors, "Scan degraded: the site served our agent a bot-challenge page instead of content. Unmeasured dimensions are reported as unmeasured, not zero."],
       degraded: true,
+      countryGuess: detectCountry(null, domain), // a challenge page proves nothing about location
     };
   }
 
@@ -783,5 +850,6 @@ export async function runScan(input: string, scoring?: ScoringConfig): Promise<S
     pagesScanned,
     errors,
     degraded: false,
+    countryGuess: detectCountry(html, domain),
   };
 }
