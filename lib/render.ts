@@ -32,9 +32,15 @@ export async function probeWebMCP(url: string): Promise<WebMCPProbe> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 45_000);
+    // Keyed when FIRECRAWL_API_KEY is set (real rate limits); keyless otherwise.
     const res = await fetch("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.FIRECRAWL_API_KEY
+          ? { Authorization: `Bearer ${process.env.FIRECRAWL_API_KEY}` }
+          : {}),
+      },
       signal: controller.signal,
       body: JSON.stringify({
         url,
