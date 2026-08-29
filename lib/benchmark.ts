@@ -1,8 +1,5 @@
 import { db } from "./db";
 
-/** Our own deployments — never counted in market statistics or percentiles. */
-const SELF_DOMAINS = new Set(["scanwebmcp.vercel.app", "agentsurfacescan.com", "www.agentsurfacescan.com"]);
-
 /**
  * Benchmark context from the corpus. Spec §8 rules: a sector percentile is
  * shown only at n ≥ 30 for that sector; below that, the cross-corpus
@@ -41,7 +38,6 @@ export async function getBenchmark(
   const latestPerSite = new Map<number, Row>();
   for (const r of (data ?? []) as unknown as (Row & { sites: { sector: string | null; opt_out: boolean; domain: string } })[]) {
     if (r.sites?.opt_out) continue;
-    if (SELF_DOMAINS.has(r.sites?.domain)) continue; // the instrument is not the market
     if (!latestPerSite.has(r.site_id))
       latestPerSite.set(r.site_id, { ...r, sector: r.sites?.sector ?? null });
   }
@@ -105,7 +101,6 @@ export async function getObservatoryStats(): Promise<ObservatoryStats> {
   const latest = new Map<number, { id: number; rung: number | null; sector: string | null }>();
   for (const r of (scanRows ?? []) as unknown as { id: number; site_id: number; rung: number | null; sites: { sector: string | null; opt_out: boolean; domain: string } }[]) {
     if (r.sites?.opt_out) continue;
-    if (SELF_DOMAINS.has(r.sites?.domain)) continue;
     if (!latest.has(r.site_id)) latest.set(r.site_id, { id: r.id, rung: r.rung, sector: r.sites?.sector ?? null });
   }
   const scanIds = [...latest.values()].map((r) => r.id);

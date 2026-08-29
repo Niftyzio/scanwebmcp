@@ -71,10 +71,10 @@ export default async function Observatory() {
         </tbody>
       </table>
       <p className="muted small">
-        This site excludes itself from every statistic above — the only Callable site we&apos;ve
-        found so far is <a href="/scan/scanwebmcp.vercel.app">this one</a>, and counting yourself is
-        cheating. Sector percentiles appear on result pages once a sector reaches 30 scanned sites.
-        Corpus:
+        The lone Callable entry above is this site itself — scanned by the same rules as everyone
+        else, and it started the night at rung 0.{" "}
+        <a href="/case-study">Read the case study →</a> Sector percentiles appear on result
+        pages once a sector reaches 30 scanned sites. Corpus:
         {" "}{s.sites} sites · {s.scans} scans · {s.signalsStored.toLocaleString()} stored signals ·{" "}
         {s.agentHits} tool calls made by AI agents against this site&apos;s own WebMCP surface.
       </p>

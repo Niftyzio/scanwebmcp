@@ -50,6 +50,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <nav>
             <a href="/ladder">The Ladder</a>
             <a href="/observatory">Observatory</a>
+            <a href="/case-study">Case study</a>
             <a href="/make-callable">Make it callable</a>
             <a href="/about-scanner">How we scan</a>
           </nav>
