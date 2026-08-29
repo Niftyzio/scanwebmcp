@@ -11,6 +11,8 @@
  * with rung + evidence only; percentiles arrive with the benchmark corpus.
  */
 
+import { probeWebMCP } from "./render";
+
 export const RUBRIC_VERSION = "1.0.0";
 export const SCANNER_UA =
   "AgentSurfaceScan/0.1 (+https://agentsurfacescan.com/about-scanner)";
@@ -497,7 +499,7 @@ async function checkPageSet(
 // D3 · Callability — validated probes, never bare status codes
 // ---------------------------------------------------------------------------
 
-async function checkD3(origin: string, signals: Signal[]) {
+async function checkD3(origin: string, signals: Signal[], skipRender = false) {
   const now = () => new Date().toISOString();
   for (const path of ["/.well-known/mcp", "/mcp"]) {
     const r = await politeFetch(`${origin}${path}`);
@@ -519,15 +521,48 @@ async function checkD3(origin: string, signals: Signal[]) {
       observedAt: now(),
     });
   }
-  // WebMCP registration detection needs a rendered DOM — out of v0 scope,
-  // recorded explicitly so the report can say "not yet checked" rather than "absent".
+  // WebMCP detection needs a rendered DOM — renderer behind an interface
+  // (lib/render.ts, Firecrawl keyless in v0). Failure means "not checked",
+  // never "absent".
+  if (skipRender) {
+    signals.push({
+      dimension: "D3",
+      signalKey: "webmcp_registration",
+      valueText: "render_skipped_degraded_scan",
+      evidenceUrl: `${origin}/`,
+      observedAt: now(),
+    });
+    return;
+  }
+  const probe = await probeWebMCP(`${origin}/`);
+  const verdict = !probe.ok
+    ? `render_unavailable:${probe.error ?? "unknown"}`
+    : probe.toolNames.length > 0
+      ? probe.modelContextPresent
+        ? "active_tools_found"
+        : "manifest_found"
+      : probe.registrationCodeDetected
+        ? "registration_code_found"
+        : "none_detected";
   signals.push({
     dimension: "D3",
     signalKey: "webmcp_registration",
-    valueText: "requires_render_not_checked_in_v0",
+    valueText: verdict,
+    valueBool: probe.ok ? probe.toolNames.length > 0 || probe.registrationCodeDetected : undefined,
     evidenceUrl: `${origin}/`,
     observedAt: now(),
   });
+  if (probe.toolNames.length > 0) {
+    signals.push({
+      dimension: "D3",
+      signalKey: "webmcp_tools_found",
+      valueNum: probe.toolNames.length,
+      valueText: probe.toolNames.slice(0, 25).join("|"),
+      evidenceUrl: `${origin}/`,
+      evidenceSnippet: `Declared tool manifest: ${probe.toolNames.slice(0, 25).join(", ")}`,
+      observedAt: now(),
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -563,8 +598,14 @@ function score(signals: Signal[]) {
   const forms = sig(signals, "forms_as_latent_tools")?.valueNum ?? 0;
   d3 += Math.min(forms * 10, 30);
   if (sig(signals, "booking_embed")?.valueBool) d3 += 20;
-  if (sig(signals, "mcp_probe_well_known")?.valueBool || sig(signals, "mcp_probe_path")?.valueBool)
-    d3 += 50;
+  const mcpFound =
+    sig(signals, "mcp_probe_well_known")?.valueBool || sig(signals, "mcp_probe_path")?.valueBool;
+  const webmcpFound =
+    (sig(signals, "webmcp_tools_found")?.valueNum ?? 0) > 0 ||
+    sig(signals, "webmcp_registration")?.valueBool === true;
+  if (mcpFound) d3 += 50;
+  if (webmcpFound) d3 += 50;
+  d3 = Math.min(d3, 100);
 
   // D4
   let d4 = 0;
@@ -588,9 +629,7 @@ function score(signals: Signal[]) {
   let rung: 0 | 1 | 2 | 3 | 4 = 0;
   const readable = d1 >= 40 && blockedBots < 3;
   const answerable = readable && d2 >= 50;
-  const callable =
-    readable &&
-    Boolean(sig(signals, "mcp_probe_well_known")?.valueBool || sig(signals, "mcp_probe_path")?.valueBool);
+  const callable = readable && Boolean(mcpFound || webmcpFound);
   if (readable) rung = 1;
   if (answerable) rung = 2;
   if (callable) rung = 3;
@@ -622,7 +661,7 @@ export async function runScan(input: string): Promise<ScanResult> {
     );
     signals.length = 0;
     signals.push(...startedSignals);
-    await checkD3(origin, signals); // fixed-path probes still meaningful
+    await checkD3(origin, signals, true); // fixed-path probes only; no render on a walled site
     return {
       domain,
       rubricVersion: RUBRIC_VERSION,

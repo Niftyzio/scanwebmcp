@@ -57,6 +57,21 @@ function logHit(toolName: string, args: unknown, outcome: string, scanId?: numbe
 
 export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; scan?: ScanData }) {
   useEffect(() => {
+    // Detectability manifest — published even when no agent-capable browser is
+    // present, so scanners (ours included) can verify this page declares tools
+    // without needing a modelContext implementation. Convention documented at
+    // /make-callable.
+    const toolNames =
+      mode === "scan"
+        ? ["scan_agent_surface", "get_ladder_definition", "get_scan_findings", "get_evidence", "explain_opportunity", "rescan"]
+        : ["scan_agent_surface", "get_ladder_definition"];
+    try {
+      (window as unknown as { __webmcpToolManifest?: string[] }).__webmcpToolManifest = toolNames;
+      document.documentElement.dataset.webmcpTools = toolNames.join(",");
+    } catch {
+      /* manifest is best-effort */
+    }
+
     const mc = (document as unknown as { modelContext?: { registerTool: (t: object) => unknown } })
       .modelContext;
     if (!mc?.registerTool) return;

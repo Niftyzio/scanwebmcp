@@ -138,7 +138,10 @@ const TEMPLATES: Template[] = [
     impact: 5,
     ease: 2,
     applies: (r) =>
-      r.rung >= 1 && !sig(r, "mcp_probe_well_known")?.valueBool && !sig(r, "mcp_probe_path")?.valueBool,
+      r.rung >= 1 &&
+      !sig(r, "mcp_probe_well_known")?.valueBool &&
+      !sig(r, "mcp_probe_path")?.valueBool &&
+      (sig(r, "webmcp_tools_found")?.valueNum ?? 0) === 0,
     title: () => "Nothing on your site is callable yet — and almost nobody else's is either",
     text: () =>
       `No MCP endpoint or registered tool surface was found. That is normal: callability is the empty column across nearly every sector we scan. Which is the opportunity — the first firm in a sector to expose even one capability (a scoping call, a quote, an eligibility check) becomes the one assistants can actually transact with.`,
