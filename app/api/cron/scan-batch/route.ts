@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const supabase = db();
   const { data: items } = await supabase
     .from("scan_queue")
-    .select("id, domain, sector, attempts")
+    .select("id, domain, sector, attempts, error")
     .eq("status", "pending")
     .order("id")
     .limit(Math.min(Math.max(BATCH, 1), 2));
@@ -33,23 +33,39 @@ export async function GET(request: Request) {
       .from("scan_queue")
       .update({ status: "running", attempts: item.attempts + 1 })
       .eq("id", item.id);
+    // Render-backfill rows (queued by scan-service when the WebMCP renderer
+    // was unavailable) re-scan as "rescan", not "seed": they must not mark
+    // visitor domains as corpus members, and they need the shorter cache
+    // window so the render actually re-runs.
+    const isBackfill = item.error === "render_backfill" || item.error === "backfill_waiting_cooldown";
     try {
       const r = await requestScan({
         url: item.domain,
-        trigger: "seed",
+        trigger: isBackfill ? "rescan" : "seed",
         requesterType: "human",
         userAgent: "queue-runner/0.1",
         sector: item.sector ?? undefined,
       });
-      await supabase
-        .from("sites")
-        .update({ is_seed: true })
-        .eq("domain", item.domain.replace(/^https?:\/\//, "").toLowerCase());
+      if (isBackfill && r.cached) {
+        // Re-scan cooldown still holds — defer to a later tick without
+        // spending an attempt.
+        await supabase
+          .from("scan_queue")
+          .update({ status: "pending", attempts: item.attempts, error: "backfill_waiting_cooldown" })
+          .eq("id", item.id);
+        results.push({ domain: item.domain, ok: true, note: "backfill deferred (cooldown)" });
+        continue;
+      }
+      if (!isBackfill)
+        await supabase
+          .from("sites")
+          .update({ is_seed: true })
+          .eq("domain", item.domain.replace(/^https?:\/\//, "").toLowerCase());
       await supabase
         .from("scan_queue")
         .update({ status: "done", processed_at: new Date().toISOString() })
         .eq("id", item.id);
-      results.push({ domain: item.domain, ok: true, note: r.cached ? "cached" : "scanned" });
+      results.push({ domain: item.domain, ok: true, note: r.cached ? "cached" : isBackfill ? "backfilled" : "scanned" });
     } catch (e) {
       const note = e instanceof Error ? e.message.slice(0, 200) : "error";
       // One retry on a later tick; after that the row records why it failed.

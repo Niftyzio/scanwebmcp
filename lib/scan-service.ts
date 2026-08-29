@@ -198,6 +198,29 @@ export async function requestScan(opts: {
       })
       .eq("id", siteId);
 
+    // Render backfill: a scan whose WebMCP check degraded (renderer saturated
+    // or down) queues itself for one automatic re-scan on the cron drumbeat.
+    // Bursts degrade to "unmeasured" in the moment and heal afterwards, so
+    // render capacity bounds latency, never completeness.
+    const renderDegraded = result.signals.some(
+      (s) =>
+        s.signalKey === "webmcp_registration" &&
+        (s.valueText ?? "").startsWith("render_unavailable"),
+    );
+    if (renderDegraded) {
+      const { data: queued } = await supabase
+        .from("scan_queue")
+        .select("id")
+        .eq("domain", domain)
+        .eq("status", "pending")
+        .limit(1)
+        .maybeSingle();
+      if (!queued)
+        await supabase
+          .from("scan_queue")
+          .insert({ domain, status: "pending", error: "render_backfill" });
+    }
+
     return { slug, status: "complete", cached: false };
   } catch (e) {
     await supabase
