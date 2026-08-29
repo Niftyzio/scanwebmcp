@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Corpus composition is private IP — seed lists never enter the repo
+scripts/seed-*.csv
+seed-*.csv
