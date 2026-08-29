@@ -1,0 +1,19 @@
+# Agent Surface Scan
+
+> A free public tool: enter a URL and get a live, dated, evidenced answer to "which of this business's capabilities could an AI agent call today?" — scored against the Agent Surface Ladder v1.0 (Invisible → Readable → Answerable → Callable → Transactable), a published, versioned rubric by Sara Simeone (Agentic Sara).
+
+The Agent Surface Scan reads a website the way an AI agent would — public pages, plain requests — and reports its position on the Ladder with the exact evidence for every finding: robots.txt agent directives, llms.txt, machine-readable structured data, price and FAQ legibility, callable endpoints (MCP), registered WebMCP tools, and friction on the path from intent to commitment. Findings are framed as opportunities, ranked by impact and ease. Free, no login, permanently.
+
+For agents: this site registers WebMCP tools (scan_agent_surface, get_ladder_definition; result pages add get_scan_findings, get_evidence, explain_opportunity, rescan). In an agent-capable browser you can run scans and walk findings directly.
+
+## Pages
+
+- [Run a scan](https://scanwebmcp.vercel.app/): enter any URL, get the result in ~20 seconds
+- [The Agent Surface Ladder](https://scanwebmcp.vercel.app/ladder): the rubric — rungs, weights, method
+- [Make your site agent-callable](https://scanwebmcp.vercel.app/make-callable): current WebMCP implementation guide with a copy-paste starter tool
+- [How the scanner behaves](https://scanwebmcp.vercel.app/about-scanner): user agent, volume limits, lawful basis, corrections
+- [Opt out](https://scanwebmcp.vercel.app/opt-out)
+
+## About
+
+Built by Sara Simeone (Agentic Sara, founder of NoCodeLab.ai). Source: https://github.com/Niftyzio/scanwebmcp (AGPL-3.0). Sector benchmark percentiles arrive as the scan corpus grows.

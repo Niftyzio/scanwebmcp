@@ -263,16 +263,25 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
   });
 
   const html = botIsHtml ? asBot.body : looksLikeHtml(asBrowser.body) ? asBrowser.body : "";
-  const substantive = negotiated || html.length > 20_000;
+  // Substance = visible text, not byte count — a lean server-rendered page is
+  // MORE agent-legible than a bloated shell (byte floors punished exactly the
+  // wrong sites; caught by dogfooding on our own homepage).
+  const visibleText = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const substantive = negotiated || visibleText.length > 800;
   signals.push({
     dimension: "D1",
     signalKey: "content_without_js",
     valueBool: substantive,
-    valueNum: negotiated ? botBytes : html.length,
+    valueNum: negotiated ? botBytes : visibleText.length,
     valueText: negotiated
       ? "agent_optimised_alternate"
-      : html.length > 20_000
-        ? "substantive_html"
+      : substantive
+        ? "substantive_text"
         : browserBytes > botBytes * 3
           ? "possible_bot_challenge"
           : "thin_shell",
