@@ -20,15 +20,15 @@ Rungs are gated: you cannot be Callable while Invisible — an endpoint nobody c
 
 ## What is measured
 
-Five dimensions feed the rung and the composite score. Weights are published because a rubric you can't inspect is an opinion, not a standard.
+Five dimensions feed the rung. We publish *what we observe* — every scan lists its signals with the exact URL and timestamp behind each — while the weighting of observations into scores is the rubric's method, refined against the benchmark corpus and versioned with every scan.
 
-| Dimension | Weight | What it asks |
-|---|---|---|
-| D1 Legibility | 25% | Can an agent read you at all? robots.txt agent directives, llms.txt, content without JavaScript, sitemap, structured data, title/meta coherence — and whether you serve agents an optimised representation. |
-| D2 Answerability | 30% | Can an agent answer a buyer's question about you? Price specificity, service definitions, FAQ coverage, and whether those pages are even discoverable. |
-| D3 Callability | 20% | Is there anything an agent can invoke? Validated MCP endpoint probes, WebMCP registrations, booking embeds — and forms, which are tools with a schema waiting to be written. |
-| D4 Transactability | 15% | How far from intent to commitment? Contact affordances, friction markers, steps to action. |
-| D5 Standing | 10% | Would an agent trust and cite you? Entity clarity, named people, consistency. (Deliberately crude in v1; the weight rises as measurement improves.) |
+| Dimension | What we capture |
+|---|---|
+| D1 Legibility | Can an agent read you at all? robots.txt agent directives, llms.txt, content without JavaScript, sitemap, structured data, title/meta coherence — and whether you serve agents an optimised representation. |
+| D2 Answerability | Can an agent answer a buyer's question about you? Price visibility, service definitions, FAQ coverage, and whether those pages are even discoverable. |
+| D3 Callability | Is there anything an agent can invoke? MCP endpoints (content-validated), WebMCP registrations, booking embeds — and forms, which are tools with a schema waiting to be written. |
+| D4 Transactability | How far from intent to commitment? Contact affordances, friction markers, the path to action. |
+| D5 Standing | Would an agent trust and cite you? Entity clarity, named people, consistency. (Deliberately coarse in v1.) |
 
 Two measurement rules distinguish this rubric from a checklist:
 

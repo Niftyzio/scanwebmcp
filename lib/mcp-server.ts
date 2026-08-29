@@ -63,7 +63,7 @@ async function callTool(name: string, args: Record<string, unknown>, ua: string 
       const rung = typeof args.rung === "number" ? args.rung : undefined;
       if (rung != null && LADDER[rung]) return text(`Rung ${rung} — ${LADDER[rung][0]}: ${LADDER[rung][1]}`);
       return text(
-        "Agent Surface Ladder v1.0 (weights: legibility 25%, answerability 30%, callability 20%, transactability 15%, standing 10%): " +
+        "Agent Surface Ladder v1.0, by Sara Simeone. Five dimensions: legibility, answerability, callability, transactability, standing. Rungs: " +
           LADDER.map((l, i) => `${i} ${l[0]} — ${l[1]}`).join(" | ") +
           " Full method: https://scanwebmcp.vercel.app/ladder",
       );

@@ -142,7 +142,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
         if (typeof rung === "number" && LADDER[rung])
           return text(`Rung ${rung} — ${LADDER[rung].name}: ${LADDER[rung].definition}`);
         return text(
-          "Agent Surface Ladder v1.0 (weights: legibility 25%, answerability 30%, callability 20%, transactability 15%, standing 10%): " +
+          "Agent Surface Ladder v1.0 (by Sara Simeone; five dimensions — legibility, answerability, callability, transactability, standing — full method at /ladder): " +
             LADDER.map((l) => `${l.rung} ${l.name} — ${l.definition}`).join(" | "),
         );
       },

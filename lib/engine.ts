@@ -580,7 +580,23 @@ async function checkD3(origin: string, signals: Signal[], skipRender = false) {
 
 const sig = (signals: Signal[], key: string) => signals.find((s) => s.signalKey === key);
 
-function score(signals: Signal[]) {
+/**
+ * Scoring configuration. The values in this file are the open-source REFERENCE
+ * scoring — enough to run the scanner standalone. The hosted instance loads
+ * its current weights, gates and refinements from the private rubric_versions
+ * store at runtime; refinements are versioned there and are not published.
+ */
+export interface ScoringConfig {
+  weights: { d1: number; d2: number; d3: number; d4: number; d5: number };
+  gates: { readable_d1_min: number; answerable_d2_min: number; blocked_bots_invisible: number };
+}
+
+export const REFERENCE_SCORING: ScoringConfig = {
+  weights: { d1: 0.25, d2: 0.3, d3: 0.2, d4: 0.15, d5: 0.1 },
+  gates: { readable_d1_min: 40, answerable_d2_min: 50, blocked_bots_invisible: 3 },
+};
+
+function score(signals: Signal[], cfg: ScoringConfig = REFERENCE_SCORING) {
   // D1 (0-100)
   let d1 = 0;
   const blockedBots = AI_BOTS.filter(
@@ -632,12 +648,13 @@ function score(signals: Signal[]) {
   else if (entity?.valueBool) d5 += 40;
   if (sig(signals, "about_page_locatable")?.valueBool) d5 += 40;
 
-  const composite = Math.round(d1 * 0.25 + d2 * 0.3 + d3 * 0.2 + d4 * 0.15 + d5 * 0.1);
+  const w = cfg.weights;
+  const composite = Math.round(d1 * w.d1 + d2 * w.d2 + d3 * w.d3 + d4 * w.d4 + d5 * w.d5);
 
   // Gated rungs: you cannot be Callable while Invisible on D1.
   let rung: 0 | 1 | 2 | 3 | 4 = 0;
-  const readable = d1 >= 40 && blockedBots < 3;
-  const answerable = readable && d2 >= 50;
+  const readable = d1 >= cfg.gates.readable_d1_min && blockedBots < cfg.gates.blocked_bots_invisible;
+  const answerable = readable && d2 >= cfg.gates.answerable_d2_min;
   const callable = readable && Boolean(mcpFound || webmcpFound);
   if (readable) rung = 1;
   if (answerable) rung = 2;
@@ -652,7 +669,7 @@ function score(signals: Signal[]) {
 // Entry point
 // ---------------------------------------------------------------------------
 
-export async function runScan(input: string): Promise<ScanResult> {
+export async function runScan(input: string, scoring?: ScoringConfig): Promise<ScanResult> {
   const { origin, domain } = validateTarget(input);
   const startedAt = new Date().toISOString();
   const signals: Signal[] = [];
@@ -689,7 +706,7 @@ export async function runScan(input: string): Promise<ScanResult> {
   const pagesScanned = await checkPageSet(origin, html, signals);
   await checkD3(origin, signals);
 
-  const { scores, rung, rungName } = score(signals);
+  const { scores, rung, rungName } = score(signals, scoring);
   return {
     domain,
     rubricVersion: RUBRIC_VERSION,

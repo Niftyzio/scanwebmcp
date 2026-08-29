@@ -8,7 +8,7 @@ Built for the [OpenAI WebMCP Challenge](https://webmcp.devpost.com/), Aug–Sep 
 
 - `lib/engine.ts` — the signal engine. Plain-HTTP fetches only (no headless rendering in v0): robots.txt agent directives, llms.txt with soft-404 detection, sitemap, validated MCP endpoint probes (a 200 that serves a login page is not an endpoint), structured-data depth, agent-facing content negotiation, page-set discovery (pricing/services/FAQ/contact/about — capped at 6 pages per scan), forms-as-latent-tools, contact affordances, friction markers.
 - Every signal is stored with its evidence URL, snippet, and timestamp. Verdicts are validated content, never bare status codes.
-- Rungs are gated (you cannot be Callable while Invisible) and scored against published weights — see the Ladder page.
+- Rungs are gated (you cannot be Callable while Invisible). This repo ships a reference scoring configuration; the hosted instance loads its current scoring from a private, versioned rubric store.
 
 ## Scanner conduct
 

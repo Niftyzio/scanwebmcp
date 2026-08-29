@@ -1,4 +1,4 @@
-import { runScan, validateTarget, RUBRIC_VERSION } from "./engine";
+import { runScan, validateTarget, RUBRIC_VERSION, REFERENCE_SCORING, type ScoringConfig } from "./engine";
 import { pickOpportunities } from "./opportunities";
 import { db } from "./db";
 
@@ -86,7 +86,18 @@ export async function requestScan(opts: {
   if (scanErr) throw new Error(`Could not create scan: ${scanErr.message}`);
 
   try {
-    const result = await runScan(opts.url);
+    // Production scoring comes from the private rubric store; the code's
+    // reference values are the fallback for standalone use.
+    let scoring: ScoringConfig = REFERENCE_SCORING;
+    const { data: rubric } = await supabase
+      .from("rubric_versions")
+      .select("weights_json")
+      .eq("version", RUBRIC_VERSION)
+      .maybeSingle();
+    const wj = rubric?.weights_json as { weights?: ScoringConfig["weights"]; gates?: ScoringConfig["gates"] } | null;
+    if (wj?.weights && wj?.gates) scoring = { weights: wj.weights, gates: wj.gates };
+
+    const result = await runScan(opts.url, scoring);
     const opportunities = pickOpportunities(result);
 
     const { error: sigErr } = await supabase.from("signals").insert(

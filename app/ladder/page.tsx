@@ -16,11 +16,11 @@ const RUNGS = [
 ];
 
 const DIMENSIONS = [
-  ["D1 Legibility", "25%", "Can an agent read you at all? robots.txt agent directives, llms.txt, content without JavaScript, sitemap, structured data, title/meta coherence — and whether you serve agents an optimised representation."],
-  ["D2 Answerability", "30%", "Can an agent answer a buyer's question about you? Price specificity, service definitions, FAQ coverage, and whether those pages are even discoverable."],
-  ["D3 Callability", "20%", "Is there anything an agent can invoke? Validated MCP endpoint probes, WebMCP registrations, booking embeds — and forms, which are tools with a schema waiting to be written."],
-  ["D4 Transactability", "15%", "How far from intent to commitment? Contact affordances, friction markers, steps to action."],
-  ["D5 Standing", "10%", "Would an agent trust and cite you? Entity clarity, named people, consistency. (Deliberately crude in v1; the weight rises as measurement improves.)"],
+  ["D1 Legibility", "Can an agent read you at all? We observe robots.txt agent directives, llms.txt, content without JavaScript, sitemap, structured data, title/meta coherence — and whether you serve agents an optimised representation."],
+  ["D2 Answerability", "Can an agent answer a buyer's question about you? We observe price visibility, service definitions, FAQ coverage, and whether those pages are even discoverable."],
+  ["D3 Callability", "Is there anything an agent can invoke? We observe MCP endpoints (content-validated), WebMCP registrations, booking embeds — and forms, which are tools with a schema waiting to be written."],
+  ["D4 Transactability", "How far from intent to commitment? We observe contact affordances, friction markers, and the path to action."],
+  ["D5 Standing", "Would an agent trust and cite you? We observe entity clarity, named people, and consistency. (Deliberately coarse in v1.)"],
 ];
 
 export default function LadderPage() {
@@ -69,18 +69,20 @@ export default function LadderPage() {
         measurement beats a flattering guess.
       </p>
 
-      <h2>What is measured</h2>
+      <h2>What is captured</h2>
       <p>
-        Five dimensions feed the rung and the composite score. Weights are published because a
-        rubric you can&apos;t inspect is an opinion, not a standard.
+        Five dimensions feed the rung. We publish <em>what we observe</em> — every scan lists its
+        signals with the exact URL and timestamp behind each one. How those observations are
+        weighted into scores is the rubric&apos;s method, refined against the benchmark corpus and
+        versioned with every scan.
       </p>
       <table>
         <thead>
-          <tr><th>Dimension</th><th>Weight</th><th>What it asks</th></tr>
+          <tr><th>Dimension</th><th>What we capture</th></tr>
         </thead>
         <tbody>
-          {DIMENSIONS.map(([d, w, q]) => (
-            <tr key={d}><td><strong>{d}</strong></td><td>{w}</td><td>{q}</td></tr>
+          {DIMENSIONS.map(([d, q]) => (
+            <tr key={d}><td><strong>{d}</strong></td><td>{q}</td></tr>
           ))}
         </tbody>
       </table>
