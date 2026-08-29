@@ -26,7 +26,6 @@
  *  3. code      — registerTool call patterns in the rendered document's markup
  */
 
-import { chromium } from "playwright-core";
 import { SCANNER_UA } from "./engine";
 
 export interface WebMCPProbe {
@@ -129,7 +128,15 @@ function remoteBrowserEndpoint(): string | undefined {
 async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
   // playwright-core carries all client logic: locally it launches the
   // browsers `npx playwright install` downloaded; in serverless (no browser
-  // binaries) only the remote-connect path can succeed.
+  // binaries) only the remote-connect path can succeed. Dynamic import so a
+  // deploy that failed to bundle it degrades to Firecrawl instead of a 500.
+  let chromium: (typeof import("playwright-core"))["chromium"];
+  try {
+    ({ chromium } = await import("playwright-core"));
+  } catch (e) {
+    return probeFailure(`playwright_not_installed:${e instanceof Error ? e.message.split("\n")[0] : e}`, "playwright");
+  }
+
   const endpoint = remoteBrowserEndpoint();
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
