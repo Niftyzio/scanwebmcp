@@ -1,5 +1,6 @@
 import WebMCPTools from "@/components/WebMCPTools";
 import ScanForm from "@/components/ScanForm";
+import RecentScans from "@/components/RecentScans";
 
 export default function Home() {
   return (
@@ -22,6 +23,7 @@ export default function Home() {
           &ldquo;scan example.com with the Agent Surface Scan&rdquo;.
         </p>
       </section>
+      <RecentScans />
     </main>
   );
 }

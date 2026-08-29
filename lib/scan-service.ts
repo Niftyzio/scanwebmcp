@@ -1,5 +1,6 @@
-import { runScan, validateTarget, RUBRIC_VERSION, REFERENCE_SCORING, type ScoringConfig } from "./engine";
+import { runScan, validateTarget, detectCountry, RUBRIC_VERSION, REFERENCE_SCORING, type ScoringConfig } from "./engine";
 import { pickOpportunities } from "./opportunities";
+import { matchSector } from "./sectors";
 import { db } from "./db";
 
 export interface ScanRecord {
@@ -27,31 +28,70 @@ const slugify = (domain: string) =>
  * One scan per domain per 24h unless explicitly re-scanned (spec §10 caching
  * rule). Returns the existing scan when the cache holds.
  */
+/** Self-declared industry: only slugs from the pre-seeded taxonomy are
+ *  recorded, so the backend never fills with free-text noise and growing
+ *  sectors are countable (spec: benchmark a sector once its sample justifies
+ *  it). Never overwrites a sector already on record. */
+function normaliseSector(input?: string): string | null {
+  if (!input) return null;
+  return matchSector(input)?.slug ?? null;
+}
+
+
+/** Abuse limits: a scan costs the target site ~10 polite fetches and us a
+ *  worker slot, so both are metered. Per-requester cap is enforced against
+ *  the database (serverless instances share no memory); re-scans get a
+ *  per-domain cooldown so nobody uses the scanner to hammer a third party. */
+const IP_SCANS_PER_HOUR = 10;
+const RESCAN_COOLDOWN_MS = 3600_000; // 1h
+const CACHE_WINDOW_MS = 24 * 3600_000; // spec §10
+
 export async function requestScan(opts: {
   url: string;
   trigger: "user" | "rescan" | "agent" | "seed";
   requesterType: "human" | "agent";
   userAgent?: string;
+  sector?: string;
+  ipHash?: string;
 }): Promise<{ slug: string; status: string; cached: boolean }> {
   const { domain } = validateTarget(opts.url);
   const supabase = db();
+  const declaredSector = normaliseSector(opts.sector);
+
+  if (opts.ipHash && opts.trigger !== "seed") {
+    const { count } = await supabase
+      .from("scans")
+      .select("*", { count: "exact", head: true })
+      .eq("requester_ip_hash", opts.ipHash)
+      .gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+    if ((count ?? 0) >= IP_SCANS_PER_HOUR)
+      throw new Error(
+        "Rate limit: that's a lot of scans in one hour from this connection. Results stay live at their links — come back in a bit for more.",
+      );
+  }
 
   const { data: site } = await supabase
     .from("sites")
-    .select("id, opt_out, last_scanned_at")
+    .select("id, opt_out, last_scanned_at, sector, country")
     .eq("domain", domain)
     .maybeSingle();
 
   if (site?.opt_out) throw new Error("This domain has opted out of scanning.");
+  if (site && !site.sector && declaredSector) {
+    await supabase.from("sites").update({ sector: declaredSector }).eq("id", site.id);
+  }
 
   const slug = slugify(domain);
-  if (site && opts.trigger !== "rescan") {
+  if (site) {
+    // Fresh-enough result → serve it. Re-scans shorten the window rather than
+    // bypassing it, so the button can't be used to hammer a site.
+    const windowMs = opts.trigger === "rescan" ? RESCAN_COOLDOWN_MS : CACHE_WINDOW_MS;
     const { data: recent } = await supabase
       .from("scans")
       .select("slug, status, completed_at")
       .eq("site_id", site.id)
       .eq("status", "complete")
-      .gte("completed_at", new Date(Date.now() - 24 * 3600_000).toISOString())
+      .gte("completed_at", new Date(Date.now() - windowMs).toISOString())
       .order("completed_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -62,7 +102,12 @@ export async function requestScan(opts: {
   if (!siteId) {
     const { data: created, error } = await supabase
       .from("sites")
-      .insert({ domain, first_scanned_at: new Date().toISOString() })
+      .insert({
+        domain,
+        first_scanned_at: new Date().toISOString(),
+        sector: declaredSector,
+        country: detectCountry(null, domain), // TLD guess now; page evidence refines it post-scan
+      })
       .select("id")
       .single();
     if (error) throw new Error(`Could not register site: ${error.message}`);
@@ -80,6 +125,7 @@ export async function requestScan(opts: {
       trigger: opts.trigger,
       requester_type: opts.requesterType,
       user_agent: opts.userAgent?.slice(0, 300) ?? null,
+      requester_ip_hash: opts.ipHash ?? null,
     })
     .select("id")
     .single();
@@ -144,7 +190,12 @@ export async function requestScan(opts: {
 
     await supabase
       .from("sites")
-      .update({ last_scanned_at: new Date().toISOString() })
+      .update({
+        last_scanned_at: new Date().toISOString(),
+        // Page evidence (declared address, phone prefix, postcode) fills in
+        // what the TLD couldn't — never overwrites a country already known.
+        ...(!site?.country && result.countryGuess ? { country: result.countryGuess } : {}),
+      })
       .eq("id", siteId);
 
     return { slug, status: "complete", cached: false };

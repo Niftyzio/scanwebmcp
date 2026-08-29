@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { requestScan } from "@/lib/scan-service";
 
 export const maxDuration = 60;
 
+/** Requester identity for rate limiting only: salted hash, raw IP never stored. */
+function ipHash(request: Request): string | undefined {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (!ip) return undefined;
+  const salt = process.env.SCAN_RATE_SALT ?? "agent-surface-scan-v0";
+  return createHash("sha256").update(`${salt}:${ip}`).digest("hex").slice(0, 32);
+}
+
 export async function POST(request: Request) {
-  let body: { url?: string; rescan?: boolean; requester?: string };
+  let body: { url?: string; rescan?: boolean; requester?: string; sector?: string };
   try {
     body = await request.json();
   } catch {
@@ -19,11 +28,17 @@ export async function POST(request: Request) {
       trigger: body.rescan ? "rescan" : requesterType === "agent" ? "agent" : "user",
       requesterType,
       userAgent: request.headers.get("user-agent") ?? undefined,
+      sector: body.sector,
+      ipHash: ipHash(request),
     });
     return NextResponse.json(result);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Scan failed";
-    const status = /valid URL|Private|opted out|http/.test(message) ? 400 : 500;
+    const status = /^Rate limit/.test(message)
+      ? 429
+      : /valid URL|Private|opted out|http/.test(message)
+        ? 400
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
