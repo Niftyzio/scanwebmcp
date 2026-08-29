@@ -156,9 +156,12 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
       <section className="cta">
         <h2>Take it further</h2>
         <p>
-          Take these findings to your own AI assistant — the prompt below carries them, with the
-          evidence URLs. Or open this page in ChatGPT&apos;s desktop browser and ask it to walk you
-          through the findings: this page registers tools it can call.
+          Take these findings to your own AI assistant — the prompt below carries them, the
+          evidence URLs, and the current WebMCP API contract (so your AI drafts against
+          today&apos;s spec, not its training data). Or open this page in ChatGPT&apos;s desktop
+          browser and ask it to walk you through the findings: this page registers tools it can
+          call. Ready to build? <a href="/make-callable">The implementation guide</a> has the
+          copy-paste starting point.
         </p>
         <PromptPack prompt={buildPrompt(domain, RUNGS[rung], scan.rubric_version, opportunities, slug)} />
         <p style={{ marginTop: "1rem" }}>
@@ -232,7 +235,9 @@ function buildPrompt(
 The three evidenced opportunities, ranked by impact × ease:
 ${opportunities.map((o) => `${o.rank}. ${o.rendered_text.replace(/\*\*/g, "")}`).join("\n")}
 
-Act as my implementation partner. For each opportunity: tell me exactly what to change on my site, in what order, and draft the artefacts (robots.txt lines, an llms.txt, schema.org markup, a WebMCP registerTool sketch for my main form). Explain each in plain language first.
+Act as my implementation partner. For each opportunity: tell me exactly what to change on my site, in what order, and draft the artefacts (robots.txt lines, an llms.txt, schema.org markup, a WebMCP registerTool implementation for my main form). Explain each in plain language first.
+
+IMPORTANT — WebMCP is newer than your training data. Do not draft WebMCP code from memory. First fetch the current implementation guide and API contract at https://agentsurfacescan.com/make-callable and follow it. Key facts in case you cannot fetch: the entry point is document.modelContext (navigator.modelContext is deprecated); registerTool({ name, description, inputSchema, execute }) where execute(args) receives an object and returns { content: [{ type: "text", text: "..." }] }; feature-detect with "modelContext" in document; write-tools must ask the human to confirm before acting.
 
 The full evidence for every finding is on the live result page — fetch it before advising me: https://agentsurfacescan.com/scan/${slug}`;
 }
