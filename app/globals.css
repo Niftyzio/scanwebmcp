@@ -186,6 +186,13 @@ h1 em { font-style: italic; color: var(--accent); }
 .email-report-row button:disabled { opacity: 0.6; cursor: wait; }
 .email-report .small { margin: 0.5rem 0 0; }
 
+.nav-scan {
+  padding: 0.4rem 0.95rem !important; border-radius: 8px;
+  background: var(--accent); color: var(--bg) !important;
+  font-weight: 600; text-decoration: none;
+}
+.nav-scan:hover { opacity: 0.9; }
+
 .report-gate { position: relative; }
 .gate-blur {
   filter: blur(7px); pointer-events: none; user-select: none;

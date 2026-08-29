@@ -28,7 +28,7 @@ export default function Home() {
   return (
     <main className="wrap">
       <WebMCPTools mode="site" />
-      <section className="hero">
+      <section className="hero" id="scan">
         <p className="kicker">AI agents arrived this week. What will they find on your site?</p>
         <h1>
           Which of your business capabilities could an AI agent <em>call</em> today?

@@ -54,6 +54,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <a href="/make-callable">Make it callable</a>
             <a href="/faq">FAQ</a>
             <a href="/about-scanner">How we scan</a>
+            <a href="/#scan" className="button nav-scan">New scan</a>
           </nav>
         </header>
         {children}
