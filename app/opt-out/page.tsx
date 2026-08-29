@@ -8,8 +8,8 @@ export default function OptOut() {
       <h1>Opt out of scanning</h1>
       <p>
         If you&apos;d rather your domain weren&apos;t scanned or shown here, email{" "}
-        <a href="mailto:sara@niftyz.io?subject=Agent%20Surface%20Scan%20opt-out">
-          sara@niftyz.io
+        <a href="mailto:sara@nocodelab.ai?subject=Agent%20Surface%20Scan%20opt-out">
+          sara@nocodelab.ai
         </a>{" "}
         from an address at the domain in question, with the domain in the subject line. We remove it
         from future scans and public pages and keep only a record of the opt-out itself. You can

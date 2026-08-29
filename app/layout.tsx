@@ -31,7 +31,7 @@ const JSON_LD = {
     "@type": "Person",
     name: "Sara Simeone",
     alternateName: "Agentic Sara",
-    url: "https://www.nocodelab.ai",
+    url: "https://www.linkedin.com/in/sarasimeone/",
   },
 };
 
@@ -59,7 +59,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <footer className="site-footer">
           <p>
             Rubric: Agent Surface Ladder v1.0 · by{" "}
-            <a href="https://www.nocodelab.ai" rel="author">
+            <a href="https://www.linkedin.com/in/sarasimeone/" rel="author">
               Sara Simeone
             </a>{" "}
             (Agentic Sara) · <a href="https://github.com/Niftyzio/scanwebmcp">Source (AGPL-3.0)</a> ·{" "}

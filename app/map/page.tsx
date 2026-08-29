@@ -31,8 +31,8 @@ export default function MapPage() {
       <p>
         Fixed fee, one to two weeks, working alongside your team rather than instead of it — you end
         up owning the map and understanding it. Delivered by{" "}
-        <a href="https://www.nocodelab.ai" rel="author">Sara Simeone</a> (Agentic Sara), author of
-        the <a href="/ladder">Agent Surface Ladder</a>.
+        <a href="https://www.linkedin.com/in/sarasimeone/" rel="author">Sara Simeone</a> (Agentic
+        Sara), author of the <a href="/ladder">Agent Surface Ladder</a>.
       </p>
 
       <section className="cta">
@@ -40,7 +40,7 @@ export default function MapPage() {
         <p>
           <a
             className="button"
-            href="mailto:sara@niftyz.io?subject=Agent%20Opportunity%20Map&body=My%20scan%3A%20(paste%20your%20result%20URL)"
+            href="mailto:sara@nocodelab.ai?subject=Agent%20Opportunity%20Map&body=My%20scan%3A%20(paste%20your%20result%20URL)"
           >
             Enquire about the Map
           </a>
