@@ -83,11 +83,7 @@ export async function requestScan(opts: {
     })
     .select("id")
     .single();
-  if (scanErr) {
-    // Unique slug collision from a concurrent run — surface the existing page.
-    if (scanErr.code === "23505") return { slug, status: "running", cached: true };
-    throw new Error(`Could not create scan: ${scanErr.message}`);
-  }
+  if (scanErr) throw new Error(`Could not create scan: ${scanErr.message}`);
 
   try {
     const result = await runScan(opts.url);
