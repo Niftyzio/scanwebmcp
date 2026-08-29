@@ -33,7 +33,7 @@ export interface WebMCPProbe {
   toolNames: string[];
   registrationCodeDetected: boolean;
   modelContextPresent: boolean;
-  renderer?: "firecrawl" | "playwright";
+  renderer?: "firecrawl" | "playwright" | "playwright-remote";
   error?: string;
 }
 
@@ -110,21 +110,45 @@ async function probeViaFirecrawl(url: string): Promise<WebMCPProbe> {
   }
 }
 
+const WEBMCP_LAUNCH_ARGS = ["--enable-blink-features=WebMCP"];
+
+/**
+ * Remote browser endpoint (e.g. Browserless) for serverless deploys that
+ * cannot run Chromium. The env var holds the full wss:// URL including the
+ * token; the WebMCP launch flag is appended unless the URL already sets one.
+ */
+function remoteBrowserEndpoint(): string | undefined {
+  const base = process.env.BROWSER_WS_ENDPOINT;
+  if (!base) return undefined;
+  if (base.includes("launch=")) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}launch=${encodeURIComponent(JSON.stringify({ args: WEBMCP_LAUNCH_ARGS }))}`;
+}
+
 async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
-  let chromium: (typeof import("playwright"))["chromium"];
+  // Full playwright locally (bundled browsers); playwright-core in production,
+  // where only the remote-connect path is possible.
+  let chromium: (typeof import("playwright-core"))["chromium"];
   try {
     ({ chromium } = await import("playwright"));
   } catch {
-    return probeFailure("playwright_not_installed", "playwright");
+    try {
+      ({ chromium } = await import("playwright-core"));
+    } catch {
+      return probeFailure("playwright_not_installed", "playwright");
+    }
   }
 
+  const endpoint = remoteBrowserEndpoint();
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
-    // WebMCP is a real runtime feature in this Chromium (Chrome 149+ origin
+    // WebMCP is a real runtime feature in Chromium (Chrome 149+ origin
     // trial): the flag exposes document.modelContext / navigator.modelContext
     // to secure-context pages, and the WebMCP CDP domain streams actual tool
     // registrations — the strongest possible detection tier.
-    browser = await chromium.launch({ headless: true, args: ["--enable-blink-features=WebMCP"] });
+    browser = endpoint
+      ? await chromium.connect(endpoint, { timeout: 30_000 })
+      : await chromium.launch({ headless: true, args: WEBMCP_LAUNCH_ARGS });
     const page = await browser.newPage({ userAgent: SCANNER_UA });
 
     const cdpTools: string[] = [];
@@ -151,7 +175,7 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
     await page.waitForTimeout(2_500);
     const raw = await page.evaluate(PROBE_SCRIPT);
     const html = await page.content();
-    const probe = interpretProbe(raw, html, "playwright");
+    const probe = interpretProbe(raw, html, endpoint ? "playwright-remote" : "playwright");
     if (cdpObserved && cdpTools.length > 0) {
       // Live registrations observed against a real modelContext: report those
       // names (deduped with any manifest) and mark the context active.
