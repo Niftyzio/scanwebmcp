@@ -173,6 +173,10 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         <p style={{ marginTop: "1rem" }}>
           <RescanButton domain={domain} />
         </p>
+        <p className="small" style={{ marginTop: "0.8rem" }}>
+          Want the full capability catalogue behind these three opportunities — prioritised, valued,
+          first tool specced? <a href="/map">The Agent Opportunity Map →</a>
+        </p>
       </section>
     </main>
   );

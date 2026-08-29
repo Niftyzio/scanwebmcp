@@ -117,8 +117,8 @@ export default function MakeCallable() {
 
       <p className="muted">
         Want the full picture — which of your capabilities are worth exposing, in what order, at
-        what value? That&apos;s the <a href="https://www.nocodelab.ai">Agent Opportunity Map</a>.
-        This page gets you your first tool; the map gets you the right ten.
+        what value? That&apos;s the <a href="/map">Agent Opportunity Map</a>. This page gets you
+        your first tool; the map gets you the right ten.
       </p>
     </main>
   );
