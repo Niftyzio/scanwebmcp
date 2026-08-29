@@ -1,0 +1,84 @@
+import type { Metadata } from "next";
+import WebMCPTools from "@/components/WebMCPTools";
+
+export const metadata: Metadata = {
+  title: "FAQ — Agent Surface Scan",
+  description: "Direct answers about the scan, the Ladder, what we store, and how agents call this site.",
+};
+
+const FAQS: [string, string][] = [
+  [
+    "What does the Agent Surface Scan actually do?",
+    "It reads your website the way an AI agent would — public pages, plain requests, no login — and reports where you sit on the Agent Surface Ladder: Invisible, Readable, Answerable, Callable or Transactable. Every finding carries the exact URL, timestamp and observed evidence behind it.",
+  ],
+  [
+    "Is it really free? What's the catch?",
+    "Free, permanently, no login. The catch is transparent: the scan is how we build the benchmark corpus and how businesses discover the paid Agent Opportunity Map. The report itself will never be the product.",
+  ],
+  [
+    "Is there any AI inside the scanner?",
+    "No. The scan is deterministic code: fetches, pattern checks, arithmetic. That's deliberate — evidence beats generation, results are reproducible, and no one's AI tokens are spent. AI enters only when you choose it: your own assistant reading the results, or an agent calling our tools.",
+  ],
+  [
+    "What do you store about my site?",
+    "Observed public signals only — what a visiting machine could see anyway — with evidence snippets capped at 500 characters. Nothing behind a login is ever requested. Full conduct rules, including our declared user agent and volume limits, are on the How we scan page, and you can opt out at any time.",
+  ],
+  [
+    "My score seems wrong. What do I do?",
+    "Open the evidence section on your result page — every claim shows exactly what was observed and when. If the evidence itself is wrong, email sara@nocodelab.ai; corrections are logged and the page re-issued with a visible timestamp. If your site's firewall blocked our scanner, the page says so plainly rather than guessing.",
+  ],
+  [
+    "How do I improve my rung?",
+    "In order: let AI crawlers read you (robots.txt), publish an llms.txt and machine-readable markup, put real answers on your site — services, prices or price bands, FAQs — then expose one capability as a callable tool. The Make it callable guide has the copy-paste starting point; the fastest movers go from Invisible to Readable in an afternoon.",
+  ],
+  [
+    "Why does nobody score Transactable?",
+    "Because verifying it means actually completing an action on your site — booking, ordering, submitting — which we will not do uninvited. The automated scan assesses up to Callable; Transactable is verified through a consented invocation test.",
+  ],
+  [
+    "Can my AI assistant use this site directly?",
+    "Yes, two ways. In an agent-capable browser (like the ChatGPT desktop app), this site registers WebMCP tools — ask your assistant to scan a site and it can. And any MCP-compatible app can connect to our MCP endpoint listed at /.well-known/mcp.",
+  ],
+  [
+    "How often does the scoring change?",
+    "The rubric is refined quarterly against the benchmark corpus. Every scan records the rubric version it was scored under, so comparisons are always like-for-like.",
+  ],
+  [
+    "Who is behind this?",
+    "Sara Simeone (Agentic Sara), author of the Agent Surface Ladder. The scanner's code is open source under AGPL-3.0; the rubric's method and the benchmark corpus are not part of that licence.",
+  ],
+];
+
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQS.map(([q, a]) => ({
+    "@type": "Question",
+    name: q,
+    acceptedAnswer: { "@type": "Answer", text: a },
+  })),
+};
+
+export default function FaqPage() {
+  return (
+    <main className="wrap article">
+      <WebMCPTools mode="site" />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+      />
+      <p className="kicker">Direct answers — the same courtesy we score everyone else on</p>
+      <h1>Questions, answered</h1>
+      {FAQS.map(([q, a]) => (
+        <section key={q}>
+          <h2>{q}</h2>
+          <p>{a}</p>
+        </section>
+      ))}
+      <section className="cta">
+        <h2>Still wondering where you stand?</h2>
+        <p><a className="button" href="/">Run your scan</a></p>
+      </section>
+    </main>
+  );
+}

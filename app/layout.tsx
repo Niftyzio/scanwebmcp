@@ -52,6 +52,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <a href="/observatory">Observatory</a>
             <a href="/case-study">Case study</a>
             <a href="/make-callable">Make it callable</a>
+            <a href="/faq">FAQ</a>
             <a href="/about-scanner">How we scan</a>
           </nav>
         </header>
