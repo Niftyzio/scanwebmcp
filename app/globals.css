@@ -186,6 +186,31 @@ h1 em { font-style: italic; color: var(--accent); }
 .email-report-row button:disabled { opacity: 0.6; cursor: wait; }
 .email-report .small { margin: 0.5rem 0 0; }
 
+.report-gate { position: relative; }
+.gate-blur {
+  filter: blur(7px); pointer-events: none; user-select: none;
+  max-height: 70vh; overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 55%, transparent 95%);
+  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 95%);
+}
+.gate-panel {
+  position: absolute; top: 8rem; left: 50%; transform: translateX(-50%);
+  width: min(30rem, calc(100% - 2rem));
+  background: var(--card); border: 1px solid var(--accent); border-radius: 14px;
+  padding: 1.4rem 1.6rem; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+.gate-panel h2 { margin-top: 0; }
+.gate-panel form { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.8rem 0 0.4rem; }
+.gate-panel input {
+  flex: 1; min-width: 200px; font: inherit; padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: inherit;
+}
+.gate-panel button {
+  font: inherit; padding: 0.65rem 1.1rem; border: none; border-radius: 8px;
+  background: var(--accent); color: var(--bg); cursor: pointer; font-weight: 600;
+}
+.gate-panel button:disabled { opacity: 0.6; cursor: wait; }
+
 .corpus-counter { margin: 0.9rem 0 0.4rem; color: var(--muted); font-size: 0.95rem; }
 .corpus-count {
   font-family: var(--mono); font-weight: 700; font-size: 1.25rem;

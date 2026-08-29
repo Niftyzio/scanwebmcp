@@ -62,6 +62,7 @@ export async function POST(request: Request) {
     verdict: RUNG_PLAIN[scan.rung ?? 0],
   });
 
+  if (!sendResult.sent) console.error(`report-email send failed: ${sendResult.error}`);
   const { error: insertErr } = await supabase.from("leads").upsert(
     {
       email,
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
       scan_id: scan.id,
       ip_hash: ipHash,
       report_sent: sendResult.sent,
+      send_error: sendResult.sent ? null : sendResult.error ?? "unknown",
     },
     { onConflict: "email,domain" },
   );

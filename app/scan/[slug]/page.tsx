@@ -4,6 +4,7 @@ import WebMCPTools from "@/components/WebMCPTools";
 import RescanButton from "@/components/RescanButton";
 import RememberScan from "@/components/RememberScan";
 import EmailReport from "@/components/EmailReport";
+import ReportGate from "@/components/ReportGate";
 import PromptPack from "@/components/PromptPack";
 import { buildAgentView } from "@/lib/agent-view";
 import { getBenchmark, type DimKey } from "@/lib/benchmark";
@@ -142,7 +143,8 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         dims={{ d1: scan.d1, d2: scan.d2, d3: scan.d3, d4: scan.d4, d5: scan.d5 }}
       />
 
-      <EmailReport slug={scan.slug} />
+      <ReportGate slug={scan.slug} enabled={process.env.REPORT_GATE !== "off"}>
+      {process.env.REPORT_GATE === "off" && <EmailReport slug={scan.slug} />}
 
       <AgentEyes domain={domain} signals={signals} />
 
@@ -223,6 +225,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
           <RescanButton domain={domain} />
         </p>
       </section>
+      </ReportGate>
     </main>
   );
 }
