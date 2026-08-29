@@ -1,6 +1,28 @@
 import WebMCPTools from "@/components/WebMCPTools";
 import ScanForm from "@/components/ScanForm";
 import RecentScans from "@/components/RecentScans";
+import { db } from "@/lib/db";
+
+// The addictive number: refreshed at most every 5 minutes, climbing daily.
+export const revalidate = 300;
+
+async function CorpusCounter() {
+  try {
+    const { count } = await db()
+      .from("sites")
+      .select("*", { count: "exact", head: true })
+      .eq("opt_out", false);
+    if (!count || count < 100) return null;
+    return (
+      <p className="corpus-counter">
+        <span className="corpus-count">{count.toLocaleString("en-GB")}</span> websites scanned — and
+        counting. Every one re-draws the benchmark. <a href="/observatory">Watch it grow →</a>
+      </p>
+    );
+  } catch {
+    return null; // the counter is a flourish, never a point of failure
+  }
+}
 
 export default function Home() {
   return (
@@ -17,6 +39,7 @@ export default function Home() {
           Answerable → Callable → Transactable — and the three opportunities most worth taking.
         </p>
         <ScanForm />
+        <CorpusCounter />
         <p className="muted small">
           Free. No login. Public pages only, six pages per scan, evidence attached to every claim.
           This page is itself agent-callable: in ChatGPT&apos;s desktop browser, just ask it to

@@ -186,6 +186,12 @@ h1 em { font-style: italic; color: var(--accent); }
 .email-report-row button:disabled { opacity: 0.6; cursor: wait; }
 .email-report .small { margin: 0.5rem 0 0; }
 
+.corpus-counter { margin: 0.9rem 0 0.4rem; color: var(--muted); font-size: 0.95rem; }
+.corpus-count {
+  font-family: var(--mono); font-weight: 700; font-size: 1.25rem;
+  color: var(--accent); font-variant-numeric: tabular-nums;
+}
+
 .recent-scans { margin-top: 2.2rem; }
 .recent-scans ul { list-style: none; padding: 0; margin: 0.6rem 0; }
 .recent-scans li a {
