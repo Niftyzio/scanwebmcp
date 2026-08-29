@@ -28,6 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </a>
           <nav>
             <a href="/ladder">The Ladder</a>
+            <a href="/make-callable">Make it callable</a>
             <a href="/about-scanner">How we scan</a>
           </nav>
         </header>
