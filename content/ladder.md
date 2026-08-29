@@ -41,6 +41,6 @@ Firecrawl's keyless launch removed the last human step between an agent and its 
 
 ## Versioning
 
-Scores are comparable only within a rubric version. This is v1.0.0; changes are logged here, and every scan records the version it was scored against.
+**The rubric is refined quarterly against the benchmark corpus.** As the dataset grows, thresholds and weightings are re-cut to match how the agent-facing web actually behaves — a living standard, not a frozen checklist. Scores are comparable only within a rubric version: this is v1.0.0, changes are logged here, and every scan records the version it was scored against.
 
 *The first implementation of this rubric is the [Agent Surface Scan](/) — which is itself agent-callable, because a rubric about callability that an agent cannot call would be embarrassing.*

@@ -110,8 +110,11 @@ export default function LadderPage() {
 
       <h2>Versioning</h2>
       <p>
-        Scores are comparable only within a rubric version. This is v1.0.0; changes are logged here,
-        and every scan records the version it was scored against.
+        <strong>The rubric is refined quarterly against the benchmark corpus.</strong> As the
+        dataset grows, thresholds and weightings are re-cut to match how the agent-facing web
+        actually behaves — a living standard, not a frozen checklist. Scores are comparable only
+        within a rubric version: this is v1.0.0, changes are logged here, and every scan records
+        the version it was scored against.
       </p>
       <p className="muted">
         The first implementation of this rubric is the <a href="/">Agent Surface Scan</a> — which is
