@@ -134,6 +134,28 @@ const TEMPLATES: Template[] = [
       `The only way to reach you that we could observe is a phone number. An agent cannot ring you. An email address or a simple form gives assistants a path to route a warm enquiry to you — today that path doesn't exist.`,
   },
   {
+    key: "content_library_latent_tool",
+    impact: 4,
+    ease: 3,
+    applies: (r) =>
+      (sig(r, "content_library_links")?.valueNum ?? 0) >= 8 &&
+      !sig(r, "mcp_probe_well_known")?.valueBool &&
+      !sig(r, "mcp_probe_path")?.valueBool &&
+      (sig(r, "webmcp_tools_found")?.valueNum ?? 0) === 0,
+    title: () => "Your knowledge library is a latent tool",
+    text: (r) =>
+      `We counted ${sig(r, "content_library_links")!.valueNum} links into your insights and knowledge sections from the homepage alone — a library an agent can only skim mid-conversation. Exposed as a search tool, your entire library answers a buyer's question in one call, with your name on the citation, instead of being paraphrased from whatever a crawler happened to read. For knowledge-rich firms this is usually the highest-value capability to make callable first.`,
+  },
+  {
+    key: "content_library_invisible",
+    impact: 4,
+    ease: 4,
+    applies: (r) => sig(r, "content_library_links")?.valueText === "section_exists_articles_not_enumerable",
+    title: () => "You publish a knowledge library agents cannot see",
+    text: () =>
+      `Your navigation points to an insights or knowledge section — but its articles are listed neither in your pages' raw HTML nor in your sitemap, so an agent cannot enumerate, read, or cite any of it. Years of expertise, invisible at the exact moment buyers ask their assistants who knows this subject. Two fixes, in order: list every article in your sitemap (often one CMS setting), then expose the library as a search tool so agents quote you by name.`,
+  },
+  {
     key: "next_rung_callable",
     impact: 5,
     ease: 2,

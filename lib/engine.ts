@@ -440,6 +440,70 @@ async function checkPageSet(
     }
   }
 
+  // Content library — links into knowledge sections, a proxy for "this site
+  // knows a lot that an agent can only skim". Recorded but not scored in
+  // v1.0 (scoring it is a rubric-version change); feeds the content-library
+  // opportunity template.
+  const contentLinks = new Set(
+    [...homepageHtml.matchAll(/href=["']([^"'#?]+)["']/gi)]
+      .map((m) => m[1])
+      .filter((h) =>
+        /\/(insights?|blog|guides?|resources?|articles?|knowledge|case-stud|publications?|whitepapers?)(\/|$)/i.test(h),
+      ),
+  );
+  // Most sites expose the library through ONE nav link — follow it and count
+  // the articles on the index page itself.
+  let libraryCount = contentLinks.size;
+  let libraryUrl = `${origin}/`;
+  // Derive the section index from any content link — a deep link like
+  // /insights/2026/foo still tells us the library lives at /insights.
+  const sectionSeg = [...contentLinks]
+    .map((h) => {
+      try {
+        const path = new URL(h.startsWith("/") ? origin + h : h).pathname;
+        return path.split("/").filter(Boolean).find((seg) =>
+          /^(insights?|blog|guides?|resources?|articles?|knowledge|case-studies|publications?|whitepapers?|news)$/i.test(seg),
+        );
+      } catch {
+        return undefined;
+      }
+    })
+    .find(Boolean);
+  if (sectionSeg && libraryCount < 8) {
+    // The definitive count comes from the sitemap — it lists every URL even
+    // when the index page renders its list client-side (observed: a law
+    // firm's insights index with zero article links in raw HTML).
+    const CONTENT_PATH = /\/(insights?|blog|guides?|resources?|articles?|knowledge|case-studies|publications?|whitepapers?|news)\//i;
+    let sitemapBody = (await politeFetch(`${origin}/sitemap.xml`)).body;
+    if (/<sitemapindex/i.test(sitemapBody)) {
+      const children = [...sitemapBody.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
+      const preferred = children.find((u) => CONTENT_PATH.test(u)) ?? children[0];
+      if (preferred) sitemapBody = (await politeFetch(preferred)).body;
+    }
+    const contentUrls = [...sitemapBody.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)]
+      .map((m) => m[1])
+      .filter((u) => CONTENT_PATH.test(u));
+    if (contentUrls.length > libraryCount) {
+      libraryCount = contentUrls.length;
+      libraryUrl = `${origin}/sitemap.xml`;
+    }
+  }
+  signals.push({
+    dimension: "D2",
+    signalKey: "content_library_links",
+    valueNum: libraryCount,
+    valueText:
+      libraryCount >= 8
+        ? "substantial_library"
+        : sectionSeg
+          ? "section_exists_articles_not_enumerable" // nav points at a library, but neither raw pages nor the sitemap list its articles
+          : libraryCount > 0
+            ? "some_content"
+            : "none_detected",
+    evidenceUrl: libraryUrl,
+    observedAt: now(),
+  });
+
   // Signals over everything fetched
   const forms = (combinedHtml.match(/<form[\s>]/gi) ?? []).length;
   signals.push({
