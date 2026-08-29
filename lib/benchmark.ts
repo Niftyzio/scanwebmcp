@@ -7,6 +7,8 @@ import { db } from "./db";
  * site only, so re-scans don't double-count.
  */
 
+export type DimKey = "d1" | "d2" | "d3" | "d4" | "d5";
+
 export interface Benchmark {
   sectorName: string | null;
   sectorN: number;
@@ -14,6 +16,16 @@ export interface Benchmark {
   allN: number;
   allPercentile: number | null;
   rungDist: Record<number, number>; // corpus-wide rung distribution
+  /** Per-pillar percentile against the same pool the composite used
+   *  (sector at n≥30, otherwise the whole corpus). Null where unmeasured. */
+  dimPercentiles: Record<DimKey, number | null>;
+  /** Median score of the pool per pillar — the "typical firm analysed". */
+  dimMedians: Record<DimKey, number | null>;
+  dimPool: "sector" | "all";
+  dimPoolN: number;
+  /** Where the comparison pool's businesses are based, from recorded country
+   *  data — e.g. "UK", "mostly UK", "international". Null when we don't know. */
+  poolOrigin: string | null;
 }
 
 interface Row {
@@ -21,25 +33,34 @@ interface Row {
   composite: number | null;
   rung: number | null;
   sector: string | null;
+  country: string | null;
   created_at: string;
+  d1: number | null;
+  d2: number | null;
+  d3: number | null;
+  d4: number | null;
+  d5: number | null;
 }
+
+const DIM_KEYS: DimKey[] = ["d1", "d2", "d3", "d4", "d5"];
 
 export async function getBenchmark(
   siteId: number,
   sector: string | null,
   composite: number | null,
+  dims?: Partial<Record<DimKey, number | null>>,
 ): Promise<Benchmark> {
   const { data } = await db()
     .from("scans")
-    .select("site_id, composite, rung, created_at, sites!inner(sector, opt_out, domain)")
+    .select("site_id, composite, rung, d1, d2, d3, d4, d5, created_at, sites!inner(sector, country, opt_out, domain)")
     .eq("status", "complete")
     .order("created_at", { ascending: false });
 
   const latestPerSite = new Map<number, Row>();
-  for (const r of (data ?? []) as unknown as (Row & { sites: { sector: string | null; opt_out: boolean; domain: string } })[]) {
+  for (const r of (data ?? []) as unknown as (Row & { sites: { sector: string | null; country: string | null; opt_out: boolean; domain: string } })[]) {
     if (r.sites?.opt_out) continue;
     if (!latestPerSite.has(r.site_id))
-      latestPerSite.set(r.site_id, { ...r, sector: r.sites?.sector ?? null });
+      latestPerSite.set(r.site_id, { ...r, sector: r.sites?.sector ?? null, country: r.sites?.country ?? null });
   }
   const rows = [...latestPerSite.values()].filter((r) => r.composite != null);
 
@@ -57,6 +78,29 @@ export async function getBenchmark(
   const sectorRows = sector ? rows.filter((r) => r.sector === sector) : [];
   const sectorN = sectorRows.length;
 
+  const dimPool: "sector" | "all" = sectorN >= 30 ? "sector" : "all";
+  const dimRows = dimPool === "sector" ? sectorRows : rows;
+  const dimPercentiles = {} as Record<DimKey, number | null>;
+  const dimMedians = {} as Record<DimKey, number | null>;
+  for (const k of DIM_KEYS) {
+    const pool = dimRows
+      .filter((r) => r[k] != null)
+      .map((r) => r[k] as number)
+      .sort((a, b) => a - b);
+    dimMedians[k] = pool.length ? pool[Math.floor(pool.length / 2)] : null;
+
+    const mine = dims?.[k];
+    if (mine == null) {
+      dimPercentiles[k] = null; // unmeasured is unmeasured, never zero
+      continue;
+    }
+    const others = dimRows.filter((r) => r.site_id !== siteId && r[k] != null);
+    dimPercentiles[k] =
+      others.length < 2
+        ? null
+        : Math.round((others.filter((r) => (r[k] as number) < mine).length / others.length) * 100);
+  }
+
   return {
     sectorName: sector,
     sectorN,
@@ -64,7 +108,25 @@ export async function getBenchmark(
     allN: rows.length,
     allPercentile: pct(rows),
     rungDist,
+    dimPercentiles,
+    dimMedians,
+    dimPool,
+    dimPoolN: dimRows.length,
+    poolOrigin: describePoolOrigin(dimRows),
   };
+}
+
+/** Honest origin phrase for a pool: named only when the data supports it. */
+function describePoolOrigin(pool: Row[]): string | null {
+  const known = pool.map((r) => r.country).filter((c): c is string => !!c);
+  if (pool.length === 0 || known.length < pool.length * 0.6) return null;
+  const counts = new Map<string, number>();
+  for (const c of known) counts.set(c, (counts.get(c) ?? 0) + 1);
+  const [top, topN] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  const share = topN / pool.length;
+  if (share >= 0.9) return top;
+  if (share >= 0.6) return `mostly ${top}`;
+  return "international";
 }
 
 export interface ObservatoryStats {
