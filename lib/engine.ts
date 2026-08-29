@@ -640,23 +640,38 @@ export function detectCountry(html: string | null, domain: string): string | nul
 
 async function checkD3(origin: string, signals: Signal[], skipRender = false) {
   const now = () => new Date().toISOString();
-  for (const path of ["/.well-known/mcp", "/mcp"]) {
-    const r = await politeFetch(`${origin}${path}`);
-    // Validation: an MCP endpoint answers with JSON (or SSE), never an HTML page.
-    const contentPlausible =
-      r.ok &&
-      !looksLikeHtml(r.body) &&
-      (/json|event-stream/i.test(r.contentType) || /"jsonrpc"/.test(r.body));
+  // Discovery has no settled standard — three live drafts, three paths
+  // (SEP-1649/2127: mcp.json, SEP-1960: mcp, IETF draft: mcp-server).
+  // Probe all of them; one signal records the best answer found.
+  const probeGroups: [signalKey: string, paths: string[]][] = [
+    ["mcp_probe_well_known", ["/.well-known/mcp.json", "/.well-known/mcp", "/.well-known/mcp-server"]],
+    ["mcp_probe_path", ["/mcp"]],
+  ];
+  for (const [signalKey, paths] of probeGroups) {
+    let best: { path: string; ok: boolean; plausible: boolean } | undefined;
+    for (const path of paths) {
+      const r = await politeFetch(`${origin}${path}`);
+      // Validation: an MCP endpoint answers with JSON (or SSE), never an HTML page.
+      const contentPlausible =
+        r.ok &&
+        !looksLikeHtml(r.body) &&
+        (/json|event-stream/i.test(r.contentType) || /"jsonrpc"/.test(r.body));
+      const candidate = { path, ok: r.ok, plausible: contentPlausible };
+      // Rank: plausible endpoint > responds-but-not-mcp > absent.
+      if (!best || (candidate.plausible && !best.plausible) || (candidate.ok && !best.ok)) best = candidate;
+      if (candidate.plausible) break;
+    }
+    if (!best) continue;
     signals.push({
       dimension: "D3",
-      signalKey: `mcp_probe_${path === "/mcp" ? "path" : "well_known"}`,
-      valueBool: contentPlausible,
-      valueText: !r.ok
+      signalKey,
+      valueBool: best.plausible,
+      valueText: !best.ok
         ? "absent"
-        : contentPlausible
+        : best.plausible
           ? "plausible_endpoint"
           : "responds_but_not_mcp", // e.g. a login page on 200 — observed in the wild
-      evidenceUrl: `${origin}${path}`,
+      evidenceUrl: `${origin}${best.path}`,
       observedAt: now(),
     });
   }
