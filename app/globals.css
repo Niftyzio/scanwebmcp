@@ -136,6 +136,17 @@ th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color
 .code-block { font-size: 0.78rem; line-height: 1.5; overflow-x: auto; padding: 1rem; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); border-left-width: 1px; }
 .degraded-note { border: 1px solid #b3892b; border-radius: 10px; padding: 0.8rem 1.1rem; margin: 1rem 0; font-size: 0.92rem; background: var(--card); }
 
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.8rem; margin: 1.5rem 0; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; font-size: 0.92rem; color: var(--muted); }
+.stat-num { display: block; font-size: 1.9rem; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
+.dist { margin: 1.2rem 0; }
+.dist-row { display: grid; grid-template-columns: 9.5rem 1fr 8rem; align-items: center; gap: 0.8rem; margin: 0.45rem 0; font-size: 0.9rem; }
+.dist-label { color: var(--muted); }
+.dist-bar-track { background: var(--card); border: 1px solid var(--line); border-radius: 99px; height: 0.9rem; overflow: hidden; }
+.dist-bar { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.dist-count { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+.benchmark-strip { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem 1.1rem; margin: 1rem 0; font-size: 0.95rem; }
+
 @media (max-width: 480px) {
   h1 { font-size: 1.55rem; }
   .site-header nav { gap: 0.7rem; }

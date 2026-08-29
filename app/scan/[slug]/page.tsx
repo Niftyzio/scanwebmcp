@@ -4,6 +4,7 @@ import WebMCPTools from "@/components/WebMCPTools";
 import RescanButton from "@/components/RescanButton";
 import PromptPack from "@/components/PromptPack";
 import { buildAgentView } from "@/lib/agent-view";
+import { getBenchmark } from "@/lib/benchmark";
 
 export const dynamic = "force-dynamic";
 
@@ -80,10 +81,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
           are unmeasured, not zero. For an AI agent, of course, the wall <em>is</em> the experience.
         </div>
       )}
-      <p className="muted small">
-        Sector percentiles arrive with the benchmark corpus; today&apos;s result is the rung and the
-        evidence behind it.
-      </p>
+      <Benchmark siteId={scan.site_id} sector={scan.sites.sector ?? null} composite={scan.composite} />
 
       <AgentEyes domain={domain} signals={signals} />
 
@@ -183,6 +181,50 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
 /** Render our own `**bold** — text` template strings as React nodes — no HTML injection. */
 function renderOpp(md: string): React.ReactNode {
   return md.split(/\*\*/).map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+}
+
+/** Relative context per spec §8: sector percentile only at n≥30; otherwise the
+ *  cross-corpus comparison with the sample size stated plainly. */
+async function Benchmark({
+  siteId,
+  sector,
+  composite,
+}: {
+  siteId: number;
+  sector: string | null;
+  composite: number | null;
+}) {
+  const b = await getBenchmark(siteId, sector, composite);
+  if (b.sectorPercentile != null) {
+    return (
+      <p className="benchmark-strip">
+        <strong>{ordinal(b.sectorPercentile)} percentile</strong> among {b.sectorN} {b.sectorName}{" "}
+        sites scanned. <a href="/observatory">See the full distribution →</a>
+      </p>
+    );
+  }
+  if (b.allPercentile != null && b.allN >= 10) {
+    return (
+      <p className="benchmark-strip">
+        {sector ? `The ${sector} sample is still building — ` : ""}compared with all{" "}
+        <strong>{b.allN} businesses</strong> scanned so far, this site sits at the{" "}
+        <strong>{ordinal(b.allPercentile)} percentile</strong>.{" "}
+        <a href="/observatory">See the full distribution →</a>
+      </p>
+    );
+  }
+  return (
+    <p className="muted small">
+      Sector percentiles arrive as the benchmark corpus grows; today&apos;s result is the rung and
+      the evidence behind it. <a href="/observatory">Watch the corpus build →</a>
+    </p>
+  );
+}
+
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
 /** The buyer's-agent scene — signals translated into the conversation the owner will actually meet. */

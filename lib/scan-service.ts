@@ -155,7 +155,7 @@ export async function getScanPage(slug: string) {
   const supabase = db();
   const { data: scan } = await supabase
     .from("scans")
-    .select("*, sites!inner(domain)")
+    .select("*, sites!inner(domain, sector)")
     .eq("slug", slug)
     .order("created_at", { ascending: false })
     .limit(1)
