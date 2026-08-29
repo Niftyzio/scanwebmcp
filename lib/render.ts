@@ -197,6 +197,9 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
 export async function probeWebMCP(url: string): Promise<WebMCPProbe> {
   const playwright = await probeViaPlaywright(url);
   if (playwright.ok) return playwright;
+  // Surface the reason in ops logs — a scan that silently degrades to
+  // Firecrawl hides remote-browser misconfiguration otherwise.
+  console.warn(`[render] playwright probe unavailable (${playwright.error}); falling back to firecrawl`);
 
   const firecrawl = await probeViaFirecrawl(url);
   if (firecrawl.ok) return firecrawl;
