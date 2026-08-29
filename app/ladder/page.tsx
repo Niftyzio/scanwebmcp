@@ -61,6 +61,13 @@ export default function LadderPage() {
         Rungs are gated: you cannot be Callable while Invisible — an endpoint nobody can discover
         doesn&apos;t count.
       </p>
+      <p className="muted small">
+        A note on rung 4: Transactable means an agent completes a real action end to end, and
+        verifying that requires actually invoking a site&apos;s capability — which this scanner
+        does not do uninvited. The automated scan therefore assesses up to rung 3; rung 4 is
+        awarded through a consented invocation test, which is how attestation will work. Honest
+        measurement beats a flattering guess.
+      </p>
 
       <h2>What is measured</h2>
       <p>
