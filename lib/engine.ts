@@ -689,6 +689,7 @@ async function checkD3(origin: string, signals: Signal[], skipRender = false) {
     valueText: verdict,
     valueBool: probe.ok ? probe.toolNames.length > 0 || probe.registrationCodeDetected : undefined,
     evidenceUrl: `${origin}/`,
+    evidenceSnippet: probe.renderer ? `Rendered via ${probe.renderer}` : undefined,
     observedAt: now(),
   });
   if (probe.toolNames.length > 0) {
