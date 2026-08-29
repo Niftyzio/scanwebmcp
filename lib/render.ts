@@ -7,18 +7,23 @@
  * "absent".
  *
  * Renderer chain (first success wins):
- *  1. Firecrawl — keyed when FIRECRAWL_API_KEY is set (real rate limits),
- *     keyless otherwise (anonymous tier, 429s under repeated use).
- *  2. Local Playwright — a renderer we own (spec §10: steps that are ours must
- *     always be able to complete a scan alone). Loaded dynamically so deploys
- *     without the package (e.g. Vercel serverless) degrade gracefully.
+ *  1. Local Playwright — a renderer we own (spec §10: steps that are ours must
+ *     always be able to complete a scan alone), and the strongest detector:
+ *     its Chromium carries Chrome's WebMCP runtime feature, so it observes
+ *     real registrations via the WebMCP CDP domain. No rate limits, no cost.
+ *     Loaded dynamically, so deploys without the package (e.g. Vercel
+ *     serverless, which cannot run Chromium) fall through to Firecrawl.
+ *  2. Firecrawl — keyed when FIRECRAWL_API_KEY is set (real rate limits),
+ *     keyless otherwise (anonymous tier, 429s under repeated use). The only
+ *     renderer available in serverless production; detects via the manifest
+ *     convention and code patterns, not live registrations.
  *
- * Detection tiers (ordinary headless browsers do NOT implement
- * document.modelContext, so presence of the API itself is the weakest signal):
- *  1. manifest  — window.__webmcpToolManifest / <html data-webmcp-tools>,
+ * Detection tiers, strongest first:
+ *  1. observed  — WebMCP CDP domain reports the page's actual registerTool
+ *                 calls against a live modelContext (Playwright path only)
+ *  2. manifest  — window.__webmcpToolManifest / <html data-webmcp-tools>,
  *                 the detectability convention we publish at /make-callable
- *  2. code      — registerTool call patterns in the rendered document's markup
- *  3. active    — a live modelContext (polyfill or agent-capable environment)
+ *  3. code      — registerTool call patterns in the rendered document's markup
  */
 
 import { SCANNER_UA } from "./engine";
@@ -166,12 +171,12 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
 }
 
 export async function probeWebMCP(url: string): Promise<WebMCPProbe> {
-  const firecrawl = await probeViaFirecrawl(url);
-  if (firecrawl.ok) return firecrawl;
-
   const playwright = await probeViaPlaywright(url);
   if (playwright.ok) return playwright;
 
+  const firecrawl = await probeViaFirecrawl(url);
+  if (firecrawl.ok) return firecrawl;
+
   // Both failed — surface both errors so the stored signal says exactly why.
-  return probeFailure(`${firecrawl.error}+${playwright.error}`);
+  return probeFailure(`${playwright.error}+${firecrawl.error}`);
 }
