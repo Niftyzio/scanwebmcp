@@ -32,8 +32,10 @@ export interface WebMCPProbe {
   error?: string;
 }
 
+// The entry point is mid-migration in the wild: Chrome's origin trial exposes
+// both document.modelContext and navigator.modelContext — detect either.
 const PROBE_SCRIPT = `JSON.stringify({
-  present: typeof document.modelContext !== "undefined",
+  present: typeof document.modelContext !== "undefined" || typeof navigator.modelContext !== "undefined",
   manifest: Array.isArray(window.__webmcpToolManifest) ? window.__webmcpToolManifest.slice(0, 25) : null,
   dataAttr: document.documentElement.dataset.webmcpTools || null
 })`;
@@ -113,15 +115,49 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
 
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
-    browser = await chromium.launch({ headless: true });
+    // WebMCP is a real runtime feature in this Chromium (Chrome 149+ origin
+    // trial): the flag exposes document.modelContext / navigator.modelContext
+    // to secure-context pages, and the WebMCP CDP domain streams actual tool
+    // registrations — the strongest possible detection tier.
+    browser = await chromium.launch({ headless: true, args: ["--enable-blink-features=WebMCP"] });
     const page = await browser.newPage({ userAgent: SCANNER_UA });
+
+    const cdpTools: string[] = [];
+    let cdpObserved = false;
+    try {
+      const cdp = await page.context().newCDPSession(page);
+      cdp.on(
+        "WebMCP.toolsAdded" as Parameters<typeof cdp.on>[0],
+        (e) => {
+          for (const t of (e as { tools?: { name?: unknown }[] }).tools ?? []) {
+            if (typeof t.name === "string") cdpTools.push(t.name);
+          }
+        },
+      );
+      await cdp.send("WebMCP.enable" as Parameters<typeof cdp.send>[0]);
+      cdpObserved = true;
+    } catch {
+      /* older Chromium without the WebMCP domain — DOM-level detection still runs */
+    }
+
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
     // Same settle window as the Firecrawl path, so both renderers measure the
     // same thing: tools registered within 2.5s of DOM ready.
     await page.waitForTimeout(2_500);
     const raw = await page.evaluate(PROBE_SCRIPT);
     const html = await page.content();
-    return interpretProbe(raw, html, "playwright");
+    const probe = interpretProbe(raw, html, "playwright");
+    if (cdpObserved && cdpTools.length > 0) {
+      // Live registrations observed against a real modelContext: report those
+      // names (deduped with any manifest) and mark the context active.
+      probe.toolNames = [...new Set([...cdpTools, ...probe.toolNames])].slice(0, 25);
+      probe.modelContextPresent = true;
+    } else if (cdpObserved) {
+      // We enabled modelContext ourselves, so its mere presence proves nothing
+      // about the page — only observed registrations count as "active".
+      probe.modelContextPresent = false;
+    }
+    return probe;
   } catch (e) {
     return probeFailure(`playwright_${e instanceof Error ? e.message : String(e)}`, "playwright");
   } finally {
