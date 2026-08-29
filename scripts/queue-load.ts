@@ -22,7 +22,15 @@ async function main() {
 
   const file = process.argv[2];
   if (!file) throw new Error("Usage: npx tsx scripts/queue-load.ts <csvfile>");
-  const rows = readFileSync(file, "utf8")
+  let raw: string;
+  try {
+    raw = readFileSync(file, "utf8");
+  } catch {
+    console.error(`Can't find "${file}".`);
+    console.error(`Create a CSV of websites to scan (one "domain,sector" per line) and point this script at it.`);
+    process.exit(1);
+  }
+  const rows = raw
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith("#"))
