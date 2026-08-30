@@ -135,7 +135,7 @@ export default function ScanForm() {
             </button>
           </div>
           <button className="scan-submit" type="submit" disabled={state === "scanning"}>
-            <span className="scan-button-label">{state === "scanning" ? "Checking…" : "Check my site"}</span>
+            <span className="scan-button-label">{state === "scanning" ? "Scanning…" : "Scan"}</span>
             {state !== "scanning" && <span className="scan-arrow" aria-hidden="true">→</span>}
           </button>
         </div>
