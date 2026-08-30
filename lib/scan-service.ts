@@ -66,8 +66,11 @@ export function cacheWindowForTrigger(trigger: ScanTrigger): number {
   return trigger === "user" || trigger === "rescan" ? RESCAN_COOLDOWN_MS : CACHE_WINDOW_MS;
 }
 
-export function freshScanAvailableAt(completedAt: string): string {
-  return new Date(new Date(completedAt).getTime() + RESCAN_COOLDOWN_MS).toISOString();
+export function freshScanAvailableAt(
+  completedAt: string,
+  cacheWindowMs = RESCAN_COOLDOWN_MS,
+): string {
+  return new Date(new Date(completedAt).getTime() + cacheWindowMs).toISOString();
 }
 
 export async function requestScan(opts: {
@@ -131,7 +134,7 @@ export async function requestScan(opts: {
         status: "complete",
         cached: true,
         cachedAt: recent.completed_at,
-        freshScanAvailableAt: freshScanAvailableAt(recent.completed_at),
+        freshScanAvailableAt: freshScanAvailableAt(recent.completed_at, windowMs),
       };
     }
   }
