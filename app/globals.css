@@ -873,6 +873,12 @@ th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color
 .webmcp-tool-list li { display: grid; gap: 0.32rem; min-width: 0; padding: 0.8rem 0.9rem; background: rgba(255,255,255,0.54); border: 1px solid rgba(155,92,52,0.18); border-radius: 0.8rem; }
 .webmcp-tool-list strong { color: #442a1d; font-size: 0.85rem; line-height: 1.25; }
 .webmcp-tool-list code { overflow-wrap: anywhere; padding: 0; color: #875034; background: transparent; border: 0; font-size: 0.66rem; line-height: 1.35; }
+.webmcp-tool-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.webmcp-tool-list p { margin: 0.15rem 0 0; color: #655f58; font-size: 0.76rem; line-height: 1.45; }
+.webmcp-tool-list small { color: #81766d; font-family: var(--font-mono), monospace; font-size: 0.62rem; }
+.webmcp-kind { flex: 0 0 auto; padding: 0.2rem 0.42rem; border: 1px solid rgba(155,92,52,0.22); border-radius: 999px; color: #7b472e; font-family: var(--font-mono), monospace; font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.webmcp-kind.is-answer { color: #276645; border-color: rgba(39,102,69,0.25); background: rgba(39,102,69,0.06); }
+.webmcp-kind.is-sensitive_action { color: #9a382e; border-color: rgba(154,56,46,0.25); background: rgba(154,56,46,0.06); }
 .report-page .cta { padding: 2.2rem; border-radius: 1.3rem; }
 .report-page .plan-cta { border-color: rgba(155,92,52,0.34); }
 

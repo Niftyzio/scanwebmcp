@@ -14,6 +14,8 @@
 import { classifyWebMCPProbe, probeWebMCP } from "./render";
 import { safeFetchText, validatePublicUrl } from "./safe-http";
 import { siteUrl } from "./site";
+import { discoverWebMCPContexts } from "./webmcp-contexts";
+import { serializeWebMCPInventory } from "./webmcp-inventory";
 
 export const RUBRIC_VERSION = "1.0.0";
 export const SCANNER_UA =
@@ -1003,10 +1005,11 @@ async function probeMcpEndpoint(endpoint: string, robotsPolicy: RobotsPolicy): P
 
 async function checkD3(
   origin: string,
+  homepageHtml: string,
   signals: Signal[],
   robotsPolicy: RobotsPolicy,
   skipRender = false,
-) {
+): Promise<string[]> {
   const now = () => new Date().toISOString();
   // Discovery has no settled standard — three live drafts, three paths
   // (SEP-1649/2127: mcp.json, SEP-1960: mcp, IETF draft: mcp-server).
@@ -1015,7 +1018,11 @@ async function checkD3(
     ["mcp_probe_well_known", ["/.well-known/mcp.json", "/.well-known/mcp", "/.well-known/mcp-server"]],
     ["mcp_probe_path", ["/mcp"]],
   ];
-  const renderPromise = skipRender ? null : probeWebMCP(`${origin}/`);
+  const webMCPContexts = skipRender
+    ? []
+    : discoverWebMCPContexts(origin, homepageHtml)
+      .filter((url) => robotsPolicy.isAllowed(SCANNER_UA, url));
+  const renderPromise = skipRender ? null : probeWebMCP(webMCPContexts.length > 0 ? webMCPContexts : `${origin}/`);
   const mcpSignals = await Promise.all(probeGroups.map(async ([signalKey, paths]): Promise<Signal> => {
     const discoveries = await Promise.all(paths.map(async (path) => ({ path, response: await policyFetch(`${origin}${path}`, robotsPolicy) })));
     const endpointCandidates = new Set<string>();
@@ -1063,7 +1070,7 @@ async function checkD3(
       evidenceUrl: `${origin}/`,
       observedAt: now(),
     });
-    return;
+    return [];
   }
   const probe = await renderPromise!;
   const classification = classifyWebMCPProbe(probe);
@@ -1072,13 +1079,15 @@ async function checkD3(
     signalKey: "webmcp_registration",
     valueText: classification.verdict,
     valueBool: classification.valueBool,
-    evidenceUrl: `${origin}/`,
+    evidenceUrl: probe.inventory.contexts[0]?.finalUrl ?? `${origin}/`,
     evidenceSnippet: probe.renderer
       ? [
           `Rendered via ${probe.renderer}${probe.remoteProtocol ? ` (${probe.remoteProtocol})` : ""}`,
           probe.browserVersion,
           probe.protocolDomainAvailable ? "WebMCP protocol available" : "WebMCP protocol unavailable",
           probe.runtimeRegistryAvailable ? "live registry available" : "live registry unavailable",
+          `${probe.inventory.contexts.length} context${probe.inventory.contexts.length === 1 ? "" : "s"} scanned`,
+          probe.inventory.contextDependent ? "tools vary by page" : undefined,
         ].filter(Boolean).join(" · ")
       : undefined,
     observedAt: now(),
@@ -1087,10 +1096,29 @@ async function checkD3(
     signals.push({
       dimension: "D3",
       signalKey: "webmcp_tools_found",
-      valueNum: probe.activeToolNames.length,
-      valueText: probe.activeToolNames.slice(0, 25).join("|"),
-      evidenceUrl: `${origin}/`,
-      evidenceSnippet: `Live browser registrations: ${probe.activeToolNames.slice(0, 25).join(", ")}`,
+      valueNum: probe.inventory.totalCount,
+      valueText: probe.activeToolNames.slice(0, 100).join("|"),
+      evidenceUrl: probe.inventory.contexts[0]?.finalUrl ?? `${origin}/`,
+      evidenceSnippet: `Live browser registrations across ${probe.inventory.contexts.length} context${probe.inventory.contexts.length === 1 ? "" : "s"}: ${probe.activeToolNames.slice(0, 25).join(", ")}`,
+      observedAt: now(),
+    });
+    signals.push({
+      dimension: "D3",
+      signalKey: "webmcp_tool_inventory",
+      valueNum: probe.inventory.totalCount,
+      valueText: serializeWebMCPInventory(probe.inventory),
+      evidenceUrl: probe.inventory.contexts[0]?.finalUrl ?? `${origin}/`,
+      observedAt: now(),
+    });
+  }
+  if (probe.blockedRuntimeUrls.length > 0) {
+    signals.push({
+      dimension: "D3",
+      signalKey: "webmcp_runtime_blocked",
+      valueNum: probe.blockedRuntimeUrls.length,
+      valueText: JSON.stringify(probe.blockedRuntimeUrls),
+      evidenceUrl: probe.blockedRuntimeUrls[0],
+      evidenceSnippet: "A WebMCP-looking runtime dependency could not be safely loaded, so the live inventory may be incomplete.",
       observedAt: now(),
     });
   }
@@ -1105,6 +1133,7 @@ async function checkD3(
       observedAt: now(),
     });
   }
+  return probe.inventory.contexts.map((context) => context.finalUrl);
 }
 
 // ---------------------------------------------------------------------------
@@ -1221,7 +1250,7 @@ export async function runScan(input: string, scoring?: ScoringConfig): Promise<S
     );
     signals.length = 0;
     signals.push(...startedSignals);
-    await checkD3(origin, signals, robotsPolicy, true); // fixed-path probes only; no render on a walled site
+    await checkD3(origin, "", signals, robotsPolicy, true); // fixed-path probes only; no render on a walled site
     return {
       domain,
       rubricVersion: RUBRIC_VERSION,
@@ -1240,9 +1269,9 @@ export async function runScan(input: string, scoring?: ScoringConfig): Promise<S
 
   const pageSignals: Signal[] = [];
   const d3Signals: Signal[] = [];
-  const [pagesScanned] = await Promise.all([
+  const [pagesScanned, webMCPPages] = await Promise.all([
     checkPageSet(origin, html, pageSignals, robotsPolicy),
-    checkD3(origin, d3Signals, robotsPolicy),
+    checkD3(origin, html, d3Signals, robotsPolicy),
   ]);
   signals.push(...pageSignals, ...d3Signals);
 
@@ -1256,7 +1285,7 @@ export async function runScan(input: string, scoring?: ScoringConfig): Promise<S
     rungName,
     scores,
     signals,
-    pagesScanned,
+    pagesScanned: [...new Set([...pagesScanned, ...webMCPPages])],
     errors,
     degraded: false,
     countryGuess: detectCountry(html, domain),

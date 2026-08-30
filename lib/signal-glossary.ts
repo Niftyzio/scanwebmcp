@@ -182,7 +182,15 @@ export const SIGNALS: Record<string, SignalMeta> = {
   },
   webmcp_tools_found: {
     label: "WebMCP tools working",
-    plain: "How many live tool registrations the browser protocol observed.",
+    plain: "How many distinct live tool registrations the browser observed across the relevant pages it safely visited.",
+  },
+  webmcp_runtime_blocked: {
+    label: "WebMCP runtime dependency blocked",
+    plain: "A script that appears to provide WebMCP could not be loaded inside the scanner's safety boundary. The result may be incomplete and is not treated as zero.",
+  },
+  webmcp_tool_inventory: {
+    label: "WebMCP tool inventory",
+    plain: "Structured evidence for the live tools, their page context and their observed agent-facing descriptions.",
   },
   webmcp_tools_declared: {
     label: "WebMCP tools declared (unverified)",
@@ -294,6 +302,8 @@ export function describeSignalValue(
       return `${num ?? 0} live registration${num === 1 ? "" : "s"} observed`;
     case "webmcp_tools_declared":
       return `${num ?? 0} tool name${num === 1 ? "" : "s"} declared, not verified callable`;
+    case "webmcp_runtime_blocked":
+      return `${num ?? 0} WebMCP-looking runtime dependenc${num === 1 ? "y" : "ies"} could not be safely loaded — inventory may be incomplete`;
     case "webmcp_registration":
       if (text?.startsWith("render_unavailable"))
         return "couldn't be checked this time — the renderer was unavailable, so this is unmeasured, not counted against you";

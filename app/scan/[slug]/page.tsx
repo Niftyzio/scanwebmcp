@@ -17,6 +17,7 @@ import { siteUrl } from "@/lib/site";
 import { recommendTools, type ToolRecommendation } from "@/lib/tool-recommendations";
 import { summarizeLiveWebMCP } from "@/lib/report-summary";
 import { friendlyToolName } from "@/lib/tool-display";
+import { parseWebMCPInventory } from "@/lib/webmcp-inventory";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ const RUNGS = ["Invisible", "Readable", "Answerable", "Callable", "Transactable"
 const WEBMCP_SIGNAL_ORDER = [
   "webmcp_tools_found",
   "webmcp_registration",
+  "webmcp_runtime_blocked",
   "webmcp_tools_declared",
 ];
 
@@ -85,6 +87,9 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
     evidence_url: signal.evidence_url,
   })));
   const { liveCount: liveWebMCPCount, measured: webMCPMeasured } = summarizeLiveWebMCP(signals);
+  const webMCPInventory = parseWebMCPInventory(
+    signals.find((signal) => signal.signal_key === "webmcp_tool_inventory")?.value_text,
+  );
   const scanData = {
     scanId: scan.id,
     domain,
@@ -199,7 +204,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         </p>
         {(["D1", "D2", "D3", "D4", "D5"] as const).map((dim) => {
           const dimSignals = signals
-            .filter((s) => s.dimension === dim)
+            .filter((s) => s.dimension === dim && s.signal_key !== "webmcp_tool_inventory")
             .sort((a, b) => {
               if (dim !== "D3") return 0;
               const aRank = WEBMCP_SIGNAL_ORDER.indexOf(a.signal_key);
@@ -223,6 +228,9 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
                 const toolNames: string[] = s.signal_key === "webmcp_tools_found"
                   ? String(s.value_text ?? "").split("|").filter(Boolean)
                   : [];
+                const observedTools = s.signal_key === "webmcp_tools_found" && webMCPInventory
+                  ? webMCPInventory.tools
+                  : toolNames.map((name) => ({ name, kind: null, pageUrl: s.evidence_url }));
                 const findingValue = describeSignalValue(s.signal_key, {
                   bool: s.value_bool,
                   num: s.value_num == null ? null : Number(s.value_num),
@@ -263,12 +271,17 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
                           <p>{signalPlain(s.signal_key)}</p>
                         </div>
                       )}
-                      {toolNames.length > 0 && (
+                      {observedTools.length > 0 && (
                         <ul className="webmcp-tool-list" aria-label="Live WebMCP tools found">
-                          {toolNames.map((name) => (
-                            <li key={name}>
-                              <strong>{friendlyToolName(name)}</strong>
-                              <code>{name}</code>
+                          {observedTools.map((tool) => (
+                            <li key={`${tool.name}:${tool.pageUrl}`}>
+                              <div className="webmcp-tool-heading">
+                                <strong>{friendlyToolName(tool.name)}</strong>
+                                {tool.kind && <span className={`webmcp-kind is-${tool.kind}`}>{tool.kind.replace("_", " ")}</span>}
+                              </div>
+                              <code>{tool.name}</code>
+                              {"description" in tool && tool.description && <p>{tool.description}</p>}
+                              <small>Found on {new URL(tool.pageUrl).pathname || "/"}</small>
                             </li>
                           ))}
                         </ul>
@@ -283,7 +296,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
                           </a>
                         </p>
                       </div>
-                      {evidenceSnippet && toolNames.length === 0 && (
+                      {evidenceSnippet && observedTools.length === 0 && (
                         <div className="evidence-excerpt">
                           <span>Observed excerpt</span>
                           <blockquote className="snippet">{evidenceSnippet}</blockquote>
