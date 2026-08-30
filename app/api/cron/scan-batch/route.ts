@@ -4,7 +4,7 @@ import { requestScan } from "@/lib/scan-service";
 
 /**
  * The corpus drumbeat: Supabase pg_cron calls this route on schedule. It claims
- * domain off scan_queue and scans it as seed traffic — ~96 sites a day, the
+ * domain off scan_queue and scans it as seed traffic — up to 144 sites a day, the
  * number on the homepage climbing daily. Queue is loaded out-of-repo
  * (scripts/queue-load.ts) because corpus composition is not open source.
  * Protected by CRON_SECRET (Vercel sends it as a Bearer token to cron
@@ -20,11 +20,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const supabase = db();
+  const startedAt = Date.now();
+  console.info("scan_queue_batch_started", { batchSize: Math.min(Math.max(BATCH, 1), 2) });
   const { data: items, error: claimError } = await supabase.rpc("claim_scan_queue", {
     batch_size: Math.min(Math.max(BATCH, 1), 2),
   });
-  if (claimError)
+  if (claimError) {
+    console.error("scan_queue_claim_failed", { message: claimError.message });
     return NextResponse.json({ error: `queue claim failed: ${claimError.message}` }, { status: 500 });
+  }
 
   const results: { domain: string; ok: boolean; note: string }[] = [];
   for (const item of items ?? []) {
@@ -61,10 +65,11 @@ export async function GET(request: Request) {
       }
       const { error: doneError } = await supabase
         .from("scan_queue")
-        .update({ status: "done", processed_at: new Date().toISOString() })
+        .update({ status: "done", processed_at: new Date().toISOString(), error: null })
         .eq("id", item.id);
       if (doneError) throw new Error(`Could not finish queue row: ${doneError.message}`);
       results.push({ domain: item.domain, ok: true, note: r.cached ? "cached" : isBackfill ? "backfilled" : "scanned" });
+      console.info("scan_queue_item_completed", { queueId: item.id, domain: item.domain, cached: r.cached, isBackfill });
     } catch (e) {
       const note = e instanceof Error ? e.message.slice(0, 200) : "error";
       // One retry on a later tick; after that the row records why it failed.
@@ -81,8 +86,14 @@ export async function GET(request: Request) {
         ok: false,
         note: failureError ? `${note}; queue update failed: ${failureError.message}` : note,
       });
+      console.error("scan_queue_item_failed", { queueId: item.id, domain: item.domain, attempts: item.attempts, message: note });
     }
   }
 
+  console.info("scan_queue_batch_completed", {
+    processed: results.length,
+    succeeded: results.filter((result) => result.ok).length,
+    durationMs: Date.now() - startedAt,
+  });
   return NextResponse.json({ processed: results.length, results });
 }

@@ -1,4 +1,9 @@
-import { lookup, type LookupAddress } from "node:dns";
+import {
+  lookup,
+  type LookupAddress,
+  type LookupAllOptions,
+  type LookupOptions,
+} from "node:dns";
 import { BlockList, isIP } from "node:net";
 import { Agent, fetch as undiciFetch } from "undici";
 
@@ -28,6 +33,20 @@ export interface SafeFetchResult {
   headers: Headers;
   error?: string;
 }
+
+type LookupCallback = (
+  error: NodeJS.ErrnoException | null,
+  address: string | LookupAddress[],
+  family?: number,
+) => void;
+type ResolveAll = (
+  hostname: string,
+  options: LookupAllOptions,
+  callback: (error: NodeJS.ErrnoException | null, addresses: LookupAddress[]) => void,
+) => void;
+
+const resolveAll: ResolveAll = (hostname, options, callback) =>
+  lookup(hostname, options, callback);
 
 function ipv4Number(address: string): number | null {
   const parts = address.split(".");
@@ -109,22 +128,53 @@ async function readBoundedBody(response: Response, maxBodyBytes: number): Promis
   return new TextDecoder("utf-8", { fatal: false }).decode(joined);
 }
 
+/** Build the lookup hook used by Undici. Undici requests `all: true` when its
+ * dual-stack connection selection is enabled, so the callback must return the
+ * full address array in that mode (the Node DNS callback contract changes). */
+export function createSafeLookup(resolver: ResolveAll = resolveAll) {
+  return (hostname: string, options: LookupOptions, callback: LookupCallback) => {
+    resolver(
+      hostname,
+      {
+        all: true,
+        family: options.family,
+        hints: options.hints,
+        order: options.order ?? "verbatim",
+      },
+      (error, addresses) => {
+        if (error) return callback(error, options.all ? [] : "");
+        if (addresses.length === 0 || addresses.some((address) => !isPublicIp(address.address))) {
+          const denied = new Error("Target DNS resolved to a private or reserved address.");
+          return callback(denied, options.all ? [] : "");
+        }
+        if (options.all) return callback(null, addresses);
+        const selected = addresses[0];
+        callback(null, selected.address, selected.family);
+      },
+    );
+  };
+}
+
 function createSafeDispatcher() {
   return new Agent({
     connect: {
-      lookup(hostname, _options, callback) {
-        lookup(hostname, { all: true, verbatim: true }, (error, addresses) => {
-          if (error) return callback(error, "", 4);
-          if (addresses.length === 0 || addresses.some((a) => !isPublicIp(a.address))) {
-            const denied = new Error("Target DNS resolved to a private or reserved address.");
-            return callback(denied, "", 4);
-          }
-          const selected = addresses[0];
-          callback(null, selected.address, selected.family);
-        });
-      },
+      lookup: createSafeLookup(),
     },
   });
+}
+
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const details = [error.message];
+  const cause = error.cause;
+  if (cause instanceof Error && cause.message !== error.message) details.push(cause.message);
+  const code = cause && typeof cause === "object" && "code" in cause
+    ? String((cause as { code?: unknown }).code ?? "")
+    : "code" in error
+      ? String((error as Error & { code?: unknown }).code ?? "")
+      : "";
+  if (code) details.push(`[${code}]`);
+  return details.join(": ");
 }
 
 export async function resolvePublicHost(input: string): Promise<{ url: URL; address: string; family: 4 | 6 }> {
@@ -188,7 +238,7 @@ export async function safeFetchText(input: string, options: SafeFetchOptions): P
         body: "",
         finalUrl: current.toString(),
         headers: new Headers(),
-        error: error instanceof Error ? error.message : String(error),
+        error: describeError(error),
       };
     } finally {
       clearTimeout(timer);
