@@ -64,7 +64,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
     const toolNames =
       mode === "scan"
         ? ["scan_agent_surface", "get_ladder_definition", "get_scan_findings", "get_evidence", "explain_opportunity", "rescan", "email_report"]
-        : ["scan_agent_surface", "get_ladder_definition"];
+        : ["scan_agent_surface", "get_ladder_definition", "email_report"];
     try {
       (window as unknown as { __webmcpToolManifest?: string[] }).__webmcpToolManifest = toolNames;
       document.documentElement.dataset.webmcpTools = toolNames.join(",");
@@ -149,6 +149,69 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
       },
     });
 
+    register({
+      name: "email_report",
+      description:
+        (scan
+          ? `Send the full evidenced report for ${scan.domain} (or any other already-scanned site via the url argument) to an email address, and unlock the complete report on this page. `
+          : "Send the full evidenced report for an already-scanned website to an email address (run scan_agent_surface first if the site hasn't been scanned). ") +
+        "CONSEQUENTIAL — this subscribes the address to the report plus occasional benchmark updates (unsubscribe any time). " +
+        "Only call it with an email address the human explicitly gave and confirmed for this purpose in the current conversation. Never guess, look up, or auto-fill an address.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          email: {
+            type: "string",
+            description: "The email address the human explicitly provided and confirmed.",
+          },
+          url: {
+            type: "string",
+            description: scan
+              ? `Optional — defaults to the scan on this page (${scan.domain}).`
+              : "The scanned website the report is for, e.g. example.com.",
+          },
+        },
+        required: scan ? ["email"] : ["email", "url"],
+      },
+      annotations: { readOnly: false, consequential: true },
+      execute: async ({ email, url }) => {
+        let slug = scan?.slug;
+        if (typeof url === "string" && url.trim()) {
+          try {
+            const host = new URL(url.includes("://") ? url : `https://${url}`).hostname;
+            // Mirrors the server's slugify so the lookup hits the same scan.
+            slug = host.replace(/^www\./, "").replace(/[^a-z0-9.]+/gi, "-").toLowerCase();
+          } catch {
+            return text("That doesn't look like a valid website address.");
+          }
+        }
+        if (!slug) return text("Pass the website (url) whose report should be emailed — or run scan_agent_surface first.");
+        const res = await fetch("/api/report-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, slug }),
+        });
+        const j = await res.json();
+        if (!res.ok)
+          return text(`Report not sent: ${j.error}${res.status === 404 ? " Run scan_agent_surface first." : ""}`);
+        const unlockingHere = scan && slug === scan.slug;
+        if (unlockingHere) {
+          try {
+            // Same key ReportGate reads — the human watches their page unlock.
+            localStorage.setItem("agent-scan-unlocked", "yes");
+          } catch {
+            /* private window: the emailed report still arrives */
+          }
+          setTimeout(() => location.reload(), 1200);
+        }
+        return text(
+          `Report sent to ${email} — it links the live result at ${location.origin}/scan/${slug}.` +
+            (unlockingHere ? " The full report is now unlocked on this page (reloading)." : "") +
+            " They'll also get occasional benchmark updates and can unsubscribe any time.",
+        );
+      },
+    });
+
     if (mode === "scan" && scan) {
       register({
         name: "get_scan_findings",
@@ -210,44 +273,6 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
           const el = document.getElementById(`opportunity-${o.rank}`);
           el?.scrollIntoView({ behavior: "smooth", block: "center" });
           return text(`Opportunity ${o.rank} (impact ${o.impact}/5, ease ${o.ease}/5): ${o.text}`);
-        },
-      });
-
-      register({
-        name: "email_report",
-        description:
-          `Send the full evidenced report for ${scan.domain} to an email address, and unlock the complete report on this page. ` +
-          "CONSEQUENTIAL — this subscribes the address to the report plus occasional benchmark updates (unsubscribe any time). " +
-          "Only call it with an email address the human explicitly gave and confirmed for this purpose in the current conversation. Never guess, look up, or auto-fill an address.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            email: {
-              type: "string",
-              description: "The email address the human explicitly provided and confirmed.",
-            },
-          },
-          required: ["email"],
-        },
-        annotations: { readOnly: false, consequential: true },
-        execute: async ({ email }) => {
-          const res = await fetch("/api/report-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, slug: scan.slug }),
-          });
-          const j = await res.json();
-          if (!res.ok) return text(`Report not sent: ${j.error}`);
-          try {
-            // Same key ReportGate reads — the human watches their page unlock.
-            localStorage.setItem("agent-scan-unlocked", "yes");
-          } catch {
-            /* private window: the emailed report still arrives */
-          }
-          setTimeout(() => location.reload(), 1200);
-          return text(
-            `Report for ${scan.domain} sent to ${email}, and the full report is now unlocked on this page (reloading). They'll also get occasional benchmark updates and can unsubscribe any time.`,
-          );
         },
       });
 
