@@ -37,10 +37,17 @@ export interface WebMCPProbe {
   declaredToolNames: string[];
   registrationCodeDetected: boolean;
   modelContextPresent: boolean;
-  /** True only when the browser protocol could observe registerTool events.
-   * A rendered page without this witness is unmeasured, never a negative. */
+  /** The CDP domain accepted WebMCP.enable. This is diagnostic only: a remote
+   * browser can expose the domain without exposing a working page runtime. */
+  protocolDomainAvailable: boolean;
+  /** True when document.modelContext.getTools() could query the live registry. */
+  runtimeRegistryAvailable: boolean;
+  /** True only when the live registry was queryable or registrations were
+   * actually emitted. A rendered page without either is unmeasured. */
   witnessAvailable: boolean;
   renderer?: "firecrawl" | "playwright" | "playwright-remote";
+  remoteProtocol?: "cdp" | "playwright";
+  browserVersion?: string;
   error?: string;
 }
 
@@ -91,7 +98,18 @@ export function interpretRuntimeToolSnapshot(raw: unknown): {
 }
 
 function probeFailure(error: string, renderer?: WebMCPProbe["renderer"]): WebMCPProbe {
-  return { ok: false, activeToolNames: [], declaredToolNames: [], registrationCodeDetected: false, modelContextPresent: false, witnessAvailable: false, renderer, error };
+  return {
+    ok: false,
+    activeToolNames: [],
+    declaredToolNames: [],
+    registrationCodeDetected: false,
+    modelContextPresent: false,
+    protocolDomainAvailable: false,
+    runtimeRegistryAvailable: false,
+    witnessAvailable: false,
+    renderer,
+    error,
+  };
 }
 
 /** Interpret a probe-script return value plus rendered HTML into a verdict. */
@@ -115,7 +133,17 @@ function interpretProbe(
   const registrationCodeDetected =
     /modelContext\s*\.\s*registerTool|registerTool\s*\(\s*\{|__webmcpToolManifest|data-webmcp-tools/.test(html);
 
-  return { ok: true, activeToolNames: [], declaredToolNames, registrationCodeDetected, modelContextPresent: present, witnessAvailable: false, renderer };
+  return {
+    ok: true,
+    activeToolNames: [],
+    declaredToolNames,
+    registrationCodeDetected,
+    modelContextPresent: present,
+    protocolDomainAvailable: false,
+    runtimeRegistryAvailable: false,
+    witnessAvailable: false,
+    renderer,
+  };
 }
 
 export function classifyWebMCPProbe(probe: WebMCPProbe): {
@@ -187,7 +215,25 @@ async function probeViaFirecrawl(url: string): Promise<WebMCPProbe> {
   }
 }
 
-const WEBMCP_LAUNCH_ARGS = ["--enable-blink-features=WebMCP"];
+// Browserless allows --enable-features on every plan, while Chromium also
+// documents --enable-blink-features for direct local launches. Send both so
+// the same probe works with hosted and local Chrome builds.
+const WEBMCP_LAUNCH_ARGS = [
+  "--enable-features=WebMCP",
+  "--enable-blink-features=WebMCP",
+];
+
+/** Browserless uses CDP at its root/chromium endpoints and the native
+ * Playwright protocol only at paths ending in /playwright. */
+export function remoteBrowserProtocol(endpoint: string): "cdp" | "playwright" {
+  try {
+    return /(?:^|\/)playwright\/?$/i.test(new URL(endpoint).pathname)
+      ? "playwright"
+      : "cdp";
+  } catch {
+    return "cdp";
+  }
+}
 
 /**
  * Remote browser endpoint (e.g. Browserless) for serverless deploys that
@@ -215,6 +261,7 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
   }
 
   const endpoint = remoteBrowserEndpoint();
+  const remoteProtocol = endpoint ? remoteBrowserProtocol(endpoint) : undefined;
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
     // WebMCP is a real runtime feature in Chromium (Chrome 149+ origin
@@ -222,13 +269,18 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
     // to secure-context pages, and the WebMCP CDP domain streams actual tool
     // registrations — the strongest possible detection tier.
     browser = endpoint
-      ? await chromium.connect(endpoint, { timeout: 10_000 })
+      ? remoteProtocol === "playwright"
+        ? await chromium.connect(endpoint, { timeout: 10_000 })
+        : await chromium.connectOverCDP(endpoint, { timeout: 10_000 })
       : await (async () => {
           const resolved = await resolvePublicHost(url);
           const resolverRule = `--host-resolver-rules=MAP ${resolved.url.hostname} ${resolved.address}, EXCLUDE localhost`;
           return chromium.launch({ headless: true, args: [...WEBMCP_LAUNCH_ARGS, resolverRule], timeout: 10_000 });
         })();
-    const page = await browser.newPage({ userAgent: SCANNER_UA });
+    const remoteContext = remoteProtocol === "cdp" ? browser.contexts()[0] : undefined;
+    const page = remoteContext
+      ? await remoteContext.newPage()
+      : await browser.newPage({ userAgent: SCANNER_UA });
 
     const targetOrigin = new URL(url).origin;
     await page.route("**/*", async (route) => {
@@ -243,9 +295,12 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
     });
 
     const cdpTools: string[] = [];
-    let cdpObserved = false;
+    let protocolDomainAvailable = false;
     try {
       const cdp = await page.context().newCDPSession(page);
+      if (remoteProtocol === "cdp") {
+        await cdp.send("Network.setUserAgentOverride", { userAgent: SCANNER_UA });
+      }
       cdp.on(
         "WebMCP.toolsAdded" as Parameters<typeof cdp.on>[0],
         (e) => {
@@ -255,7 +310,7 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
         },
       );
       await cdp.send("WebMCP.enable" as Parameters<typeof cdp.send>[0]);
-      cdpObserved = true;
+      protocolDomainAvailable = true;
     } catch {
       /* older Chromium without the WebMCP domain — DOM-level detection still runs */
     }
@@ -271,7 +326,11 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
     const html = await page.content();
     const probe = interpretProbe(raw, html, endpoint ? "playwright-remote" : "playwright");
     const observedTools = [...new Set([...cdpTools, ...runtimeSnapshot.names])].slice(0, 25);
-    probe.witnessAvailable = cdpObserved || runtimeSnapshot.available;
+    probe.protocolDomainAvailable = protocolDomainAvailable;
+    probe.runtimeRegistryAvailable = runtimeSnapshot.available;
+    probe.witnessAvailable = cdpTools.length > 0 || runtimeSnapshot.available;
+    probe.remoteProtocol = remoteProtocol;
+    probe.browserVersion = browser.version();
     if (observedTools.length > 0) {
       // Live registrations observed against a real modelContext: report those
       // names and mark the context active.
@@ -282,6 +341,16 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
       // presence proves nothing — only discovered registrations count active.
       probe.modelContextPresent = false;
     }
+    console.info(`[render] webmcp_probe ${JSON.stringify({
+      renderer: probe.renderer,
+      remoteProtocol,
+      browserVersion: probe.browserVersion,
+      protocolDomainAvailable,
+      runtimeRegistryAvailable: runtimeSnapshot.available,
+      observedToolCount: observedTools.length,
+      declaredToolCount: probe.declaredToolNames.length,
+      witnessAvailable: probe.witnessAvailable,
+    })}`);
     return probe;
   } catch (e) {
     return probeFailure(`playwright_${e instanceof Error ? e.message : String(e)}`, "playwright");

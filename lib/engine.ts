@@ -1025,7 +1025,14 @@ async function checkD3(
     valueText: classification.verdict,
     valueBool: classification.valueBool,
     evidenceUrl: `${origin}/`,
-    evidenceSnippet: probe.renderer ? `Rendered via ${probe.renderer}` : undefined,
+    evidenceSnippet: probe.renderer
+      ? [
+          `Rendered via ${probe.renderer}${probe.remoteProtocol ? ` (${probe.remoteProtocol})` : ""}`,
+          probe.browserVersion,
+          probe.protocolDomainAvailable ? "WebMCP protocol available" : "WebMCP protocol unavailable",
+          probe.runtimeRegistryAvailable ? "live registry available" : "live registry unavailable",
+        ].filter(Boolean).join(" · ")
+      : undefined,
     observedAt: now(),
   });
   if (probe.activeToolNames.length > 0) {

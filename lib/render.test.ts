@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyWebMCPProbe,
   interpretRuntimeToolSnapshot,
+  remoteBrowserProtocol,
   type WebMCPProbe,
 } from "./render";
 
@@ -11,6 +12,8 @@ const probe = (partial: Partial<WebMCPProbe> = {}): WebMCPProbe => ({
   declaredToolNames: [],
   registrationCodeDetected: false,
   modelContextPresent: false,
+  protocolDomainAvailable: false,
+  runtimeRegistryAvailable: false,
   witnessAvailable: false,
   renderer: "playwright-remote",
   ...partial,
@@ -24,13 +27,25 @@ describe("WebMCP runtime evidence", () => {
     });
   });
 
-  it("records a negative only when the protocol witness was available", () => {
+  it("records a negative only when a runtime witness was available", () => {
     expect(classifyWebMCPProbe(probe({
       declaredToolNames: ["search_site"],
       witnessAvailable: true,
     }))).toEqual({
       verdict: "manifest_declared_unverified",
       valueBool: false,
+    });
+  });
+
+  it("does not mistake an enabled CDP domain for a working runtime witness", () => {
+    expect(classifyWebMCPProbe(probe({
+      declaredToolNames: ["search_site"],
+      protocolDomainAvailable: true,
+      runtimeRegistryAvailable: false,
+      witnessAvailable: false,
+    }))).toEqual({
+      verdict: "runtime_witness_unavailable_manifest_declared",
+      valueBool: undefined,
     });
   });
 
@@ -42,6 +57,18 @@ describe("WebMCP runtime evidence", () => {
       verdict: "active_tools_found",
       valueBool: true,
     });
+  });
+});
+
+describe("remote browser transport", () => {
+  it("uses CDP for Browserless root and chromium endpoints", () => {
+    expect(remoteBrowserProtocol("wss://production-lon.browserless.io?token=secret")).toBe("cdp");
+    expect(remoteBrowserProtocol("wss://production-lon.browserless.io/chromium?token=secret")).toBe("cdp");
+  });
+
+  it("uses the native protocol only for Playwright endpoints", () => {
+    expect(remoteBrowserProtocol("wss://production-lon.browserless.io/chromium/playwright?token=secret")).toBe("playwright");
+    expect(remoteBrowserProtocol("wss://production-lon.browserless.io/playwright/?token=secret")).toBe("playwright");
   });
 });
 
