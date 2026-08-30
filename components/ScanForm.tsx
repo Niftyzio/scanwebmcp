@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SECTOR_TAXONOMY, matchSector } from "@/lib/sectors";
+import { SECTOR_TAXONOMY, BENCHMARKED_SLUGS } from "@/lib/sectors";
 
 export default function ScanForm() {
   const [url, setUrl] = useState("");
@@ -12,19 +12,13 @@ export default function ScanForm() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!url.trim()) return;
-    const sector = matchSector(industry);
-    if (industry.trim() && !sector) {
-      setState("error");
-      setError("Pick your industry from the list — start typing and choose a match (or leave it blank).");
-      return;
-    }
     setState("scanning");
     setError("");
     try {
       const res = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim(), ...(sector ? { sector: sector.slug } : {}) }),
+        body: JSON.stringify({ url: url.trim(), ...(industry ? { sector: industry } : {}) }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Scan failed");
@@ -47,21 +41,34 @@ export default function ScanForm() {
         aria-label="Website to scan"
         required
       />
-      <input
-        type="text"
-        list="industry-list"
-        placeholder="Your industry — start typing…"
+      {/* Native select: the OS picker works everywhere, including mobile,
+          where datalist search is unusable. Benchmarked sectors first; the
+          long tail stays selectable so sector demand keeps being recorded. */}
+      <select
         value={industry}
         onChange={(e) => setIndustry(e.target.value)}
         disabled={state === "scanning"}
         aria-label="Your industry (optional, sharpens the comparison)"
-        autoComplete="off"
-      />
-      <datalist id="industry-list">
-        {SECTOR_TAXONOMY.map((s) => (
-          <option key={s.slug} value={s.label} />
-        ))}
-      </datalist>
+      >
+        <option value="">Your industry (optional)</option>
+        <optgroup label="Benchmarked sectors">
+          {BENCHMARKED_SLUGS.map((slug) => {
+            const s = SECTOR_TAXONOMY.find((t) => t.slug === slug);
+            return s ? (
+              <option key={s.slug} value={s.slug}>
+                {s.label}
+              </option>
+            ) : null;
+          })}
+        </optgroup>
+        <optgroup label="More industries">
+          {SECTOR_TAXONOMY.filter((s) => !BENCHMARKED_SLUGS.includes(s.slug)).map((s) => (
+            <option key={s.slug} value={s.slug}>
+              {s.label}
+            </option>
+          ))}
+        </optgroup>
+      </select>
       <button type="submit" disabled={state === "scanning"}>
         {state === "scanning" ? "Scanning… (~20s)" : "Scan it"}
       </button>

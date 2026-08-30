@@ -11,6 +11,18 @@ export interface SectorEntry {
   label: string; // what the user sees and types against
 }
 
+/** Sectors with an active benchmark corpus — shown first in the picker. */
+export const BENCHMARKED_SLUGS = [
+  "accountancy",
+  "law",
+  "beauty-dtc",
+  "home-dtc",
+  "training",
+  "financial-advice",
+  "recruitment",
+  "consulting",
+];
+
 export const SECTOR_TAXONOMY: SectorEntry[] = [
   // Benchmarked today
   { slug: "accountancy", label: "Accountancy" },
