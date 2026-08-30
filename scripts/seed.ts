@@ -7,13 +7,9 @@
  * Reads .env.local for Supabase credentials.
  */
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { loadLocalEnv } from "./load-local-env";
 
-// Load .env.local (tsx doesn't)
-for (const line of readFileSync(resolve(__dirname, "../.env.local"), "utf8").split("\n")) {
-  const m = line.match(/^([A-Z_]+)=(.+)$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
-}
+loadLocalEnv();
 
 async function main() {
   const { requestScan } = await import("../lib/scan-service");
@@ -80,14 +76,17 @@ async function main() {
     .eq("trigger", "seed")
     .eq("status", "complete");
   if (distributionError) throw new Error(`distribution read failed: ${distributionError.message}`);
-  const dist: Record<string, Record<number, number>> = {};
+  const dist = new Map<string, Map<number, number>>();
   for (const s of (data ?? []) as unknown as { rung: number; sites: { sector: string } }[]) {
     const sec = s.sites?.sector ?? "?";
-    dist[sec] = dist[sec] ?? {};
-    dist[sec][s.rung] = (dist[sec][s.rung] ?? 0) + 1;
+    const rungs = dist.get(sec) ?? new Map<number, number>();
+    rungs.set(s.rung, (rungs.get(s.rung) ?? 0) + 1);
+    dist.set(sec, rungs);
   }
   console.log("\nRung distribution by sector:");
-  console.log(JSON.stringify(dist, null, 1));
+  console.log(JSON.stringify(Object.fromEntries(
+    [...dist].map(([sector, rungs]) => [sector, Object.fromEntries(rungs)]),
+  ), null, 1));
 }
 
 main().catch((e) => {

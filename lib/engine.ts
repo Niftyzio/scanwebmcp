@@ -106,6 +106,13 @@ const looksLikeHtml = (body: string) =>
 
 const snippet = (s: string, n = 500) => s.replace(/\s+/g, " ").trim().slice(0, n);
 
+export const htmlToVisibleText = (html: string) => html
+  .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, " ")
+  .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, " ")
+  .replace(/<[^>]+>/g, " ")
+  .replace(/\s+/g, " ")
+  .trim();
+
 // ---------------------------------------------------------------------------
 // D1 · Legibility
 // ---------------------------------------------------------------------------
@@ -333,12 +340,7 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
   // Substance = visible text, not byte count — a lean server-rendered page is
   // MORE agent-legible than a bloated shell (byte floors punished exactly the
   // wrong sites; caught by dogfooding on our own homepage).
-  const visibleText = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const visibleText = htmlToVisibleText(html);
   const substantive = negotiated || visibleText.length > 800;
   signals.push({
     dimension: "D1",
