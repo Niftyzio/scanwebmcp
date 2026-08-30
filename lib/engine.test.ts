@@ -13,8 +13,8 @@ describe("visible HTML text", () => {
   it("removes script and style bodies with spaced closing tags", () => {
     const html = `
       <main>Useful content</main>
-      <script>secretScriptText()</script >
-      <style>.secretStyleText { display: none }</style\t>
+      <script>secretScriptText()</script\t\n ignored-attribute>
+      <style>.secretStyleText { display: none }</style\t ignored-attribute>
     `;
 
     expect(htmlToVisibleText(html)).toBe("Useful content");

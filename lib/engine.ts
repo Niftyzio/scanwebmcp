@@ -107,8 +107,8 @@ const looksLikeHtml = (body: string) =>
 const snippet = (s: string, n = 500) => s.replace(/\s+/g, " ").trim().slice(0, n);
 
 export const htmlToVisibleText = (html: string) => html
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ")
-  .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, " ")
+  .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, " ")
+  .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, " ")
   .replace(/<[^>]+>/g, " ")
   .replace(/\s+/g, " ")
   .trim();
