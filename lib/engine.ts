@@ -13,10 +13,11 @@
 
 import { probeWebMCP } from "./render";
 import { safeFetchText, validatePublicUrl } from "./safe-http";
+import { siteUrl } from "./site";
 
 export const RUBRIC_VERSION = "1.0.0";
 export const SCANNER_UA =
-  "AgentSurfaceScan/0.1 (+https://agentsurfacescan.com/about-scanner)";
+  `AgentSurfaceScan/0.1 (+${siteUrl("/about-scanner")})`;
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36";
 

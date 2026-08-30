@@ -1,8 +1,10 @@
 # The Agent Surface Ladder — v1.0
 
-*A published, versioned rubric for how much of a business an AI agent can see, understand, and act on. By Sara Simeone (Agentic Sara). Rubric version 1.0.0 · published September 2026.*
+*A published, versioned rubric for how much of a business an AI agent can see, understand, and act on. By Sara Simeone (Agentic Sara). Rubric version 1.0.0 · published August 2026.*
 
 AI agents stopped being hypothetical visitors this year. ChatGPT's desktop browser executes website-registered tools as of 25 August 2026; Chrome is trialling the same standard (WebMCP); Claude and ChatGPT have called MCP endpoints for over a year. The question for a business is no longer *whether* agents will visit, but what they find when they do: something to read, something to ask, something to call — or nothing at all.
+
+**Scope.** The rubric measures businesses that sell products or services to buyers — firms whose customers ask questions, enquire, book or order. Media, government and reference sites sit outside its scope by design; their scores read as out-of-scope, not as verdicts.
 
 The Ladder names five positions. A business sits on the highest rung it fully satisfies. Every rung is a position of opportunity: the point is never that you have failed a check, but that the next rung is specific, nearby, and nameable.
 
@@ -22,7 +24,7 @@ Rungs are gated: you cannot be Callable while Invisible — an endpoint nobody c
 
 ## What is measured
 
-Five dimensions feed the rung. We publish *what we observe* — every scan lists its signals with the exact URL and timestamp behind each — while the weighting of observations into scores is the rubric's method, refined against the benchmark corpus and versioned with every scan.
+Five dimensions feed the rung. The public result shows the score, rung and dimension summary; the free emailed report unlocks every observed signal with its exact URL and timestamp. The weighting of observations into scores is the rubric's method, refined against the benchmark corpus and versioned with every scan.
 
 | Dimension | What we capture |
 |---|---|

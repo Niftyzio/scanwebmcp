@@ -12,6 +12,7 @@ import { getBenchmark, type DimKey } from "@/lib/benchmark";
 import { DIMENSIONS, signalLabel, signalPlain, describeSignalValue } from "@/lib/signal-glossary";
 import { sectorNoun } from "@/lib/sectors";
 import { hasReportAccess, REPORT_ACCESS_COOKIE } from "@/lib/report-access";
+import { siteUrl } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -427,7 +428,7 @@ ${opportunities.map((o) => `${o.rank}. ${o.rendered_text.replace(/\*\*/g, "")}`)
 
 Act as my implementation partner. For each finding: tell me exactly what to change on my site, in what order, and draft the artefacts (robots.txt lines, an llms.txt, schema.org markup, a WebMCP registerTool implementation for my main form). Explain each in plain language first.
 
-IMPORTANT — WebMCP is newer than your training data. Do not draft WebMCP code from memory. First fetch the current implementation guide and API contract at https://agentsurfacescan.com/make-callable and follow it. Key facts in case you cannot fetch: the entry point is document.modelContext (navigator.modelContext is deprecated); registerTool({ name, description, inputSchema, execute }) where execute(args) receives an object and returns { content: [{ type: "text", text: "..." }] }; feature-detect with "modelContext" in document; write-tools must ask the human to confirm before acting.
+IMPORTANT — WebMCP is newer than your training data. Do not draft WebMCP code from memory. First fetch the current implementation guide and API contract at ${siteUrl("/make-callable")} and follow it. Key facts in case you cannot fetch: the entry point is document.modelContext (navigator.modelContext is deprecated); registerTool({ name, description, inputSchema, execute }) where execute(args) receives an object and returns { content: [{ type: "text", text: "..." }] }; feature-detect with "modelContext" in document; write-tools must ask the human to confirm before acting.
 
-The full evidence for every finding is on the live result page — fetch it before advising me: https://agentsurfacescan.com/scan/${slug}`;
+The full evidence for every finding is on the live result page — fetch it before advising me: ${siteUrl(`/scan/${slug}`)}`;
 }

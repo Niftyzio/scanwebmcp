@@ -27,7 +27,7 @@ export default function LadderPage() {
   return (
     <main className="wrap article">
       <WebMCPTools mode="site" />
-      <p className="kicker">Rubric version 1.0.0 · published September 2026 · by Sara Simeone (Agentic Sara)</p>
+      <p className="kicker">Rubric version 1.0.0 · published August 2026 · by Sara Simeone (Agentic Sara)</p>
       <h1>The Agent Surface Ladder</h1>
       <p className="lede">
         A published, versioned rubric for how much of a business an AI agent can see, understand,

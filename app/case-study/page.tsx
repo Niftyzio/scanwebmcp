@@ -36,7 +36,7 @@ export default function CaseStudy() {
           <tr><td>llms.txt — what we are, in our words, for machines</td><td>An afternoon&apos;s writing, tops</td><td>D1 Legibility</td></tr>
           <tr><td>Structured data (what this application is, who made it)</td><td>Minutes</td><td>D1 + D5 Standing</td></tr>
           <tr><td>WebMCP tools registered on every page, with a detectable manifest</td><td>The <a href="/make-callable">guide&apos;s</a> ~30 lines</td><td>D3 Callability</td></tr>
-          <tr><td>An MCP endpoint at <code>/.well-known/mcp</code>, callable by Claude and ChatGPT apps</td><td>An evening</td><td>D3 Callability</td></tr>
+          <tr><td>MCP discovery at <code>/.well-known/mcp</code>, pointing agents to the callable <code>/mcp</code> endpoint</td><td>An evening</td><td>D3 Callability</td></tr>
         </tbody>
       </table>
 

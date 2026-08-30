@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -22,7 +23,7 @@ const JSON_LD = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
   name: "Agent Surface Scan",
-  url: "https://scanwebmcp.vercel.app",
+  url: SITE_ORIGIN,
   applicationCategory: "BusinessApplication",
   description:
     "Enter a URL and get a live, evidenced answer to which of a business's capabilities an AI agent could call today, scored against the Agent Surface Ladder v1.0.",

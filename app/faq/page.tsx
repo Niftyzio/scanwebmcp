@@ -13,7 +13,7 @@ const FAQS: [string, string][] = [
   ],
   [
     "Is it really free? What's the catch?",
-    "Free, permanently, no login. The catch is transparent: the scan is how we build the benchmark corpus and how businesses discover the paid Agent Opportunity Map. The report itself will never be the product.",
+    "Free, permanently, with no account or password. Your score, rung and dimension summary stay public; the full evidence and recommendations unlock after you ask to receive the report by email. The scan is how we build the benchmark corpus and how businesses discover the paid Agent Opportunity Map. Benchmark updates are a separate optional opt-in.",
   ],
   [
     "Is there any AI inside the scanner?",
@@ -29,7 +29,7 @@ const FAQS: [string, string][] = [
   ],
   [
     "My score seems wrong. What do I do?",
-    "Open the evidence section on your result page — every claim shows exactly what was observed and when. If the evidence itself is wrong, email sara@nocodelab.ai; corrections are logged and the page re-issued with a visible timestamp. If your site's firewall blocked our scanner, the page says so plainly rather than guessing.",
+    "Request the free full report from your result page, then open its evidence section — every claim shows exactly what was observed and when. If the evidence itself is wrong, email sara@nocodelab.ai; corrections are logged and the page re-issued with a visible timestamp. If your site's firewall blocked our scanner, the page says so plainly rather than guessing.",
   ],
   [
     "How do I improve my rung?",
@@ -41,7 +41,7 @@ const FAQS: [string, string][] = [
   ],
   [
     "Can my AI assistant use this site directly?",
-    "Yes, two ways. In an agent-capable browser (like the ChatGPT desktop app), this site registers WebMCP tools — ask your assistant to scan a site and it can. And any MCP-compatible app can connect to our MCP endpoint listed at /.well-known/mcp.",
+    "Yes, two ways. In an agent-capable browser, this site registers WebMCP tools; any MCP-compatible app can also discover the endpoint through /.well-known/mcp. An assistant can run a scan and read the public summary directly. For the full evidence, it must ask whether you want the report emailed and request an address only after you say yes.",
   ],
   [
     "How often does the scoring change?",

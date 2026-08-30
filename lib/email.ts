@@ -5,6 +5,7 @@
  * (report_sent=false) and a later flush picks them up. Never fatal.
  */
 import { createReportAccessToken } from "./report-access";
+import { siteUrl } from "./site";
 
 export interface ReportEmail {
   to: string;
@@ -17,16 +18,15 @@ export interface ReportEmail {
 }
 
 const FROM = process.env.EMAIL_FROM ?? "Agent Surface Scan <scan@nocodelab.ai>";
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "https://scanwebmcp.vercel.app";
 
 export async function sendReportEmail(r: ReportEmail): Promise<{ sent: boolean; error?: string }> {
   const key = process.env.RESEND_API_KEY;
   if (!key) return { sent: false, error: "no_provider_configured" };
 
   const accessToken = createReportAccessToken(r.slug);
-  const url = `${BASE_URL}/api/report-access?token=${encodeURIComponent(accessToken)}`;
+  const url = `${siteUrl("/api/report-access")}?token=${encodeURIComponent(accessToken)}`;
   const confirmationUrl = r.marketingConfirmationToken
-    ? `${BASE_URL}/api/confirm-updates?token=${encodeURIComponent(r.marketingConfirmationToken)}`
+    ? `${siteUrl("/api/confirm-updates")}?token=${encodeURIComponent(r.marketingConfirmationToken)}`
     : null;
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -76,7 +76,7 @@ export async function sendMarketingConfirmationEmail(opts: {
 }): Promise<{ sent: boolean; error?: string }> {
   const key = process.env.RESEND_API_KEY;
   if (!key) return { sent: false, error: "no_provider_configured" };
-  const url = `${BASE_URL}/api/confirm-updates?token=${encodeURIComponent(opts.token)}`;
+  const url = `${siteUrl("/api/confirm-updates")}?token=${encodeURIComponent(opts.token)}`;
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",

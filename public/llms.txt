@@ -2,9 +2,9 @@
 
 > A free public tool: enter a URL and get a live, dated, evidenced answer to "which of this business's capabilities could an AI agent call today?" — scored against the Agent Surface Ladder v1.0 (Invisible → Readable → Answerable → Callable → Transactable), a published, versioned rubric by Sara Simeone (Agentic Sara).
 
-The Agent Surface Scan reads a website the way an AI agent would — public pages, plain requests — and reports its position on the Ladder with the exact evidence for every finding: robots.txt agent directives, llms.txt, machine-readable structured data, price and FAQ legibility, callable endpoints (MCP), registered WebMCP tools, and friction on the path from intent to commitment. Findings are framed as opportunities, ranked by impact and ease. Free, no login, permanently.
+The Agent Surface Scan reads a website the way an AI agent would — public pages, plain requests — and reports its position on the Ladder. The score, rung and dimension summary are public. The full report — exact evidence for every finding and ranked opportunities — is free and unlocked after the human asks to receive it by email. No account or password is required, and benchmark updates are a separate optional opt-in.
 
-For agents: this site registers WebMCP tools (scan_agent_surface, get_ladder_definition; result pages add get_scan_findings, get_evidence, explain_opportunity, rescan). In an agent-capable browser you can run scans and walk findings directly.
+For agents: this site registers WebMCP tools (scan_agent_surface, get_ladder_definition, email_report; result pages add get_scan_findings, get_evidence, explain_opportunity and rescan). You may run scans and read the public summary directly. Before accessing evidence or recommendations, ask the human whether they want the report emailed; request an address only if they say yes, and never guess or auto-fill one.
 
 ## Pages
 
@@ -16,4 +16,4 @@ For agents: this site registers WebMCP tools (scan_agent_surface, get_ladder_def
 
 ## About
 
-Built by Sara Simeone (Agentic Sara, founder of NoCodeLab.ai). Source: https://github.com/Niftyzio/scanwebmcp (AGPL-3.0). Sector benchmark percentiles arrive as the scan corpus grows.
+Built by Sara Simeone (Agentic Sara, founder of NoCodeLab.ai). Source: https://github.com/Niftyzio/scanwebmcp (AGPL-3.0). Live sector benchmark percentiles are available in the Observatory.

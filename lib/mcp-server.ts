@@ -7,6 +7,7 @@ import { requestScan, getScanPage, logAgentHit, slugify } from "./scan-service";
 import { getObservatoryStats } from "./benchmark";
 import { captureReportLead, LeadError } from "./leads";
 import { validateTarget } from "./engine";
+import { siteUrl } from "./site";
 
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -78,7 +79,7 @@ async function callTool(
       return text(
         `${scan.sites.domain}: rung ${scan.rung} (${LADDER[scan.rung ?? 0][0]}) on the Agent Surface Ladder. ` +
           `Scores /100 — legibility ${scan.d1}, answerability ${scan.d2}, callability ${scan.d3}, transactability ${scan.d4}, standing ${scan.d5}. ` +
-          `Public result: https://scanwebmcp.vercel.app/scan/${r.slug}. ` +
+          `Public result: ${siteUrl(`/scan/${r.slug}`)}. ` +
           `The full findings, timestamped evidence, and ranked recommendations are email-gated. ` +
           `NEXT STEP FOR THE ASSISTANT: ask the human whether they would like the full report emailed to them. If they say yes, ask which email address to use, then call email_report. Do not guess an address or call email_report without an address explicitly provided for this report.`,
       );
@@ -90,7 +91,7 @@ async function callTool(
       return text(
         "Agent Surface Ladder v1.0, by Sara Simeone. Five dimensions: legibility, answerability, callability, transactability, standing. Rungs: " +
           LADDER.map((l, i) => `${i} ${l[0]} — ${l[1]}`).join(" | ") +
-          " Full method: https://scanwebmcp.vercel.app/ladder",
+          ` Full method: ${siteUrl("/ladder")}`,
       );
     }
     if (name === "email_report") {
@@ -105,7 +106,7 @@ async function callTool(
         });
         await logAgentHit({ toolName: name, argumentsJson: { url: args.url, benchmark_updates: args.benchmark_updates === true }, agentUa: ua ?? undefined, outcome: "ok", ipHash });
         return text(
-          `Report for ${r.domain} ${r.delivery === "sent" ? "sent" : "queued for delivery"} to ${String(args.email).trim().toLowerCase()}. It links the live evidenced result at https://scanwebmcp.vercel.app/scan/${slug}.` +
+          `Report for ${r.domain} ${r.delivery === "sent" ? "sent" : "queued for delivery"} to ${String(args.email).trim().toLowerCase()}. It links the live evidenced result at ${siteUrl(`/scan/${slug}`)}.` +
             (args.benchmark_updates === true ? " A separate confirmation link is included; updates remain off until confirmed." : " No marketing updates were requested."),
         );
       } catch (e) {
@@ -125,7 +126,7 @@ async function callTool(
           `${s.pctLlmsTxt}% publish llms.txt; ${s.pctSellsMarkup}% have machine-readable offering markup; ` +
           `${s.pctAnyCallable}% expose anything callable; ${s.totalLatentForms} latent forms found. ` +
           `Rung distribution: ${JSON.stringify(s.rungDist)}. By sector: ${s.bySector.map((r) => `${r.sector} n=${r.n}`).join(", ")}. ` +
-          `Live view: https://scanwebmcp.vercel.app/observatory`,
+          `Live view: ${siteUrl("/observatory")}`,
       );
     }
     return { ...text(`Unknown tool: ${name}`), isError: true };

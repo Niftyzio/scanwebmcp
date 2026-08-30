@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "How the scanner behaves",
@@ -16,7 +17,7 @@ export default function AboutScanner() {
       <ul>
         <li>
           <strong>Identification:</strong> requests carry the user agent{" "}
-          <code>AgentSurfaceScan/0.1 (+https://agentsurfacescan.com/about-scanner)</code>.
+          <code>{`AgentSurfaceScan/0.1 (+${siteUrl("/about-scanner")})`}</code>.
         </li>
         <li><strong>Volume:</strong> at most six pages per scan, one scan per domain per 24 hours unless a re-scan is requested, 10-second timeouts.</li>
         <li><strong>Respect:</strong> robots.txt honoured for our user agent; private and internal addresses refused; no rate that could resemble an attack.</li>
