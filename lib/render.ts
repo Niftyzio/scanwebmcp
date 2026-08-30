@@ -52,6 +52,44 @@ const PROBE_SCRIPT = `JSON.stringify({
   dataAttr: document.documentElement.dataset.webmcpTools || null
 })`;
 
+// CDP events can be missed by some remote-browser transports even when the
+// page registered its tools. getTools() reads Chromium's live registry and is
+// therefore a second runtime witness, not a page-authored declaration.
+const RUNTIME_TOOLS_SCRIPT = `(async () => {
+  try {
+    const context = document.modelContext || navigator.modelContext;
+    if (!context || typeof context.getTools !== "function") {
+      return JSON.stringify({ available: false, names: [] });
+    }
+    const tools = await context.getTools();
+    return JSON.stringify({
+      available: true,
+      names: Array.from(tools || []).map((tool) => tool && tool.name).filter((name) => typeof name === "string").slice(0, 25),
+    });
+  } catch (error) {
+    return JSON.stringify({ available: false, names: [], error: String(error) });
+  }
+})()`;
+
+export function interpretRuntimeToolSnapshot(raw: unknown): {
+  available: boolean;
+  names: string[];
+} {
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!parsed || typeof parsed !== "object") return { available: false, names: [] };
+    const snapshot = parsed as { available?: unknown; names?: unknown };
+    return {
+      available: snapshot.available === true,
+      names: Array.isArray(snapshot.names)
+        ? [...new Set(snapshot.names.filter((name): name is string => typeof name === "string" && name.length > 0))].slice(0, 25)
+        : [],
+    };
+  } catch {
+    return { available: false, names: [] };
+  }
+}
+
 function probeFailure(error: string, renderer?: WebMCPProbe["renderer"]): WebMCPProbe {
   return { ok: false, activeToolNames: [], declaredToolNames: [], registrationCodeDetected: false, modelContextPresent: false, witnessAvailable: false, renderer, error };
 }
@@ -227,17 +265,21 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
     // same thing: tools registered within 2.5s of DOM ready.
     await page.waitForTimeout(1_500);
     const raw = await page.evaluate(PROBE_SCRIPT);
+    const runtimeSnapshot = interpretRuntimeToolSnapshot(
+      await page.evaluate(RUNTIME_TOOLS_SCRIPT).catch(() => undefined),
+    );
     const html = await page.content();
     const probe = interpretProbe(raw, html, endpoint ? "playwright-remote" : "playwright");
-    probe.witnessAvailable = cdpObserved;
-    if (cdpObserved && cdpTools.length > 0) {
+    const observedTools = [...new Set([...cdpTools, ...runtimeSnapshot.names])].slice(0, 25);
+    probe.witnessAvailable = cdpObserved || runtimeSnapshot.available;
+    if (observedTools.length > 0) {
       // Live registrations observed against a real modelContext: report those
-      // names (deduped with any manifest) and mark the context active.
-      probe.activeToolNames = [...new Set(cdpTools)].slice(0, 25);
+      // names and mark the context active.
+      probe.activeToolNames = observedTools;
       probe.modelContextPresent = true;
-    } else if (cdpObserved) {
-      // We enabled modelContext ourselves, so its mere presence proves nothing
-      // about the page — only observed registrations count as "active".
+    } else if (probe.witnessAvailable) {
+      // A runtime API was available, but its registry was empty. Mere context
+      // presence proves nothing — only discovered registrations count active.
       probe.modelContextPresent = false;
     }
     return probe;
