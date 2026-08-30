@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a reproducible problem that is not security-sensitive.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Security issue? Stop here and follow SECURITY.md instead of posting publicly."
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the smallest safe sequence that reproduces the issue. Remove tokens, email addresses and private data.
+    validations:
+      required: true
+  - type: input
+    id: route
+    attributes:
+      label: Affected page or route
+      placeholder: /scan/example.com
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser or agent client, operating system, and relevant version numbers.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, private report links, email addresses and personal data.
+          required: true
+        - label: This report does not disclose a security vulnerability.
+          required: true

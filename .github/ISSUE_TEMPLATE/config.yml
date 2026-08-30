@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: mailto:sara@nocodelab.ai?subject=Security%20report%3A%20Agent%20Surface%20Scan
+    about: Report vulnerabilities privately; do not include secrets or personal data.

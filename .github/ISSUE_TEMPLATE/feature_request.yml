@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest a scoped improvement to the scanner, rubric presentation, or agent interface.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user or agent need is currently unmet?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the behavior rather than prescribing an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Consent, privacy, and security impact
+      description: Note any effect on scanning scope, email consent, report access, stored data, or external actions.
+    validations:
+      required: true
