@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { classifyWebMCPProbe, type WebMCPProbe } from "./render";
+import {
+  classifyWebMCPProbe,
+  interpretRuntimeToolSnapshot,
+  type WebMCPProbe,
+} from "./render";
 
 const probe = (partial: Partial<WebMCPProbe> = {}): WebMCPProbe => ({
   ok: true,
@@ -37,6 +41,25 @@ describe("WebMCP runtime evidence", () => {
     }))).toEqual({
       verdict: "active_tools_found",
       valueBool: true,
+    });
+  });
+});
+
+describe("WebMCP runtime tool discovery", () => {
+  it("accepts and deduplicates browser-reported tool names", () => {
+    expect(interpretRuntimeToolSnapshot(JSON.stringify({
+      available: true,
+      names: ["search_site", "search_site", "book_appointment", 12],
+    }))).toEqual({
+      available: true,
+      names: ["search_site", "book_appointment"],
+    });
+  });
+
+  it("fails closed when the browser response is malformed", () => {
+    expect(interpretRuntimeToolSnapshot("not-json")).toEqual({
+      available: false,
+      names: [],
     });
   });
 });
