@@ -61,11 +61,14 @@ export function buildAgentView(domain: string, signalsIn: SignalLike[]): AgentVi
   const today: DialogueLine[] = [];
 
   // Degraded scan — the wall is the whole story; invent nothing beyond it.
-  if (get("agent_access_blocked")?.bool === true) {
+  if (get("agent_access_blocked")?.bool === true || get("scanner_access_blocked")?.bool === true) {
+    const deniedByRobots = get("scanner_access_blocked")?.bool === true;
     today.push({
       ok: false,
-      text: `I couldn't see ${domain} at all. Their security system decided I was a robot — which I am — and showed me a challenge page instead of their site. Everything you asked me, I'd have to answer from other sources or not at all.`,
-      signalKey: "agent_access_blocked",
+      text: deniedByRobots
+        ? `I couldn't inspect ${domain}: its published robots.txt rules explicitly denied this scanner, so I stopped. Everything else is unmeasured rather than guessed.`
+        : `I couldn't see ${domain} at all. Their security system decided I was a robot — which I am — and showed me a challenge page instead of their site. Everything you asked me, I'd have to answer from other sources or not at all.`,
+      signalKey: deniedByRobots ? "scanner_access_blocked" : "agent_access_blocked",
     });
     if (blockedBots.length > 0) {
       today.push({

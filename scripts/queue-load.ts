@@ -48,7 +48,8 @@ async function main() {
     process.exit(1);
   }
 
-  const { data: existing } = await supabase.from("sites").select("domain");
+  const { data: existing, error: existingError } = await supabase.from("sites").select("domain");
+  if (existingError) throw new Error(`site read failed: ${existingError.message}`);
   const known = new Set((existing ?? []).map((s) => s.domain));
   const fresh = rows.filter((r) => !known.has(r.domain));
 
@@ -60,12 +61,14 @@ async function main() {
         { domain: r.domain, sector: r.sector ? matchSector(r.sector)!.slug : null },
         { onConflict: "domain", ignoreDuplicates: true },
       );
-    if (!error) queued++;
+    if (error) throw new Error(`queue write failed for ${r.domain}: ${error.message}`);
+    queued++;
   }
-  const { count: pending } = await supabase
+  const { count: pending, error: countError } = await supabase
     .from("scan_queue")
     .select("*", { count: "exact", head: true })
     .eq("status", "pending");
+  if (countError) throw new Error(`queue count failed: ${countError.message}`);
   console.log(
     `${rows.length} rows read · ${rows.length - fresh.length} already in corpus · ${queued} queued.`,
   );

@@ -1,16 +1,8 @@
 import { NextResponse } from "next/server";
-import { createHash } from "node:crypto";
 import { requestScan } from "@/lib/scan-service";
+import { requesterHash } from "@/lib/request-identity";
 
 export const maxDuration = 60;
-
-/** Requester identity for rate limiting only: salted hash, raw IP never stored. */
-function ipHash(request: Request): string | undefined {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  if (!ip) return undefined;
-  const salt = process.env.SCAN_RATE_SALT ?? "agent-surface-scan-v0";
-  return createHash("sha256").update(`${salt}:${ip}`).digest("hex").slice(0, 32);
-}
 
 export async function POST(request: Request) {
   let body: { url?: string; rescan?: boolean; requester?: string; sector?: string };
@@ -29,7 +21,7 @@ export async function POST(request: Request) {
       requesterType,
       userAgent: request.headers.get("user-agent") ?? undefined,
       sector: body.sector,
-      ipHash: ipHash(request),
+      ipHash: requesterHash(request),
     });
     return NextResponse.json(result);
   } catch (e) {

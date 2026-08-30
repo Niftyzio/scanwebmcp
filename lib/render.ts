@@ -27,10 +27,14 @@
  */
 
 import { SCANNER_UA } from "./engine";
+import { resolvePublicHost, safeFetchText } from "./safe-http";
 
 export interface WebMCPProbe {
   ok: boolean;
-  toolNames: string[];
+  /** Registrations witnessed by the browser protocol. This is callability evidence. */
+  activeToolNames: string[];
+  /** Names advertised in a page convention. Useful discovery, not proof of callability. */
+  declaredToolNames: string[];
   registrationCodeDetected: boolean;
   modelContextPresent: boolean;
   renderer?: "firecrawl" | "playwright" | "playwright-remote";
@@ -46,7 +50,7 @@ const PROBE_SCRIPT = `JSON.stringify({
 })`;
 
 function probeFailure(error: string, renderer?: WebMCPProbe["renderer"]): WebMCPProbe {
-  return { ok: false, toolNames: [], registrationCodeDetected: false, modelContextPresent: false, renderer, error };
+  return { ok: false, activeToolNames: [], declaredToolNames: [], registrationCodeDetected: false, modelContextPresent: false, renderer, error };
 }
 
 /** Interpret a probe-script return value plus rendered HTML into a verdict. */
@@ -56,13 +60,13 @@ function interpretProbe(
   renderer: NonNullable<WebMCPProbe["renderer"]>,
 ): WebMCPProbe {
   let present = false;
-  let toolNames: string[] = [];
+  let declaredToolNames: string[] = [];
   if (typeof raw === "string") {
     try {
       const parsed = JSON.parse(raw) as { present?: boolean; manifest?: string[] | null; dataAttr?: string | null };
       present = !!parsed.present;
-      if (Array.isArray(parsed.manifest)) toolNames = parsed.manifest.map(String);
-      else if (parsed.dataAttr) toolNames = parsed.dataAttr.split(",").map((s) => s.trim()).filter(Boolean);
+      if (Array.isArray(parsed.manifest)) declaredToolNames = parsed.manifest.map(String);
+      else if (parsed.dataAttr) declaredToolNames = parsed.dataAttr.split(",").map((s) => s.trim()).filter(Boolean);
     } catch {
       /* unparseable return — fall through to code detection */
     }
@@ -70,13 +74,13 @@ function interpretProbe(
   const registrationCodeDetected =
     /modelContext\s*\.\s*registerTool|registerTool\s*\(\s*\{|__webmcpToolManifest|data-webmcp-tools/.test(html);
 
-  return { ok: true, toolNames, registrationCodeDetected, modelContextPresent: present, renderer };
+  return { ok: true, activeToolNames: [], declaredToolNames, registrationCodeDetected, modelContextPresent: present, renderer };
 }
 
 async function probeViaFirecrawl(url: string): Promise<WebMCPProbe> {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 45_000);
+    const timer = setTimeout(() => controller.abort(), 20_000);
     const res = await fetch("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
       headers: {
@@ -145,9 +149,25 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
     // to secure-context pages, and the WebMCP CDP domain streams actual tool
     // registrations — the strongest possible detection tier.
     browser = endpoint
-      ? await chromium.connect(endpoint, { timeout: 30_000 })
-      : await chromium.launch({ headless: true, args: WEBMCP_LAUNCH_ARGS });
+      ? await chromium.connect(endpoint, { timeout: 10_000 })
+      : await (async () => {
+          const resolved = await resolvePublicHost(url);
+          const resolverRule = `--host-resolver-rules=MAP ${resolved.url.hostname} ${resolved.address}, EXCLUDE localhost`;
+          return chromium.launch({ headless: true, args: [...WEBMCP_LAUNCH_ARGS, resolverRule], timeout: 10_000 });
+        })();
     const page = await browser.newPage({ userAgent: SCANNER_UA });
+
+    const targetOrigin = new URL(url).origin;
+    await page.route("**/*", async (route) => {
+      const requestUrl = route.request().url();
+      if (/^(data|blob|about):/i.test(requestUrl)) return route.continue();
+      try {
+        if (new URL(requestUrl).origin === targetOrigin) return route.continue();
+      } catch {
+        // Invalid requests are aborted below.
+      }
+      await route.abort("blockedbyclient");
+    });
 
     const cdpTools: string[] = [];
     let cdpObserved = false;
@@ -167,17 +187,17 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
       /* older Chromium without the WebMCP domain — DOM-level detection still runs */
     }
 
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 12_000 });
     // Same settle window as the Firecrawl path, so both renderers measure the
     // same thing: tools registered within 2.5s of DOM ready.
-    await page.waitForTimeout(2_500);
+    await page.waitForTimeout(1_500);
     const raw = await page.evaluate(PROBE_SCRIPT);
     const html = await page.content();
     const probe = interpretProbe(raw, html, endpoint ? "playwright-remote" : "playwright");
     if (cdpObserved && cdpTools.length > 0) {
       // Live registrations observed against a real modelContext: report those
       // names (deduped with any manifest) and mark the context active.
-      probe.toolNames = [...new Set([...cdpTools, ...probe.toolNames])].slice(0, 25);
+      probe.activeToolNames = [...new Set(cdpTools)].slice(0, 25);
       probe.modelContextPresent = true;
     } else if (cdpObserved) {
       // We enabled modelContext ourselves, so its mere presence proves nothing
@@ -193,13 +213,22 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
 }
 
 export async function probeWebMCP(url: string): Promise<WebMCPProbe> {
-  const playwright = await probeViaPlaywright(url);
+  // Resolve redirects through the hardened HTTP client first. The renderer is
+  // only ever given a public final URL, and local Chromium pins that hostname.
+  const canonical = await safeFetchText(url, {
+    method: "GET",
+    headers: { "User-Agent": SCANNER_UA },
+    timeoutMs: 8_000,
+    maxBodyBytes: 32_000,
+  });
+  if (canonical.error) return probeFailure(`preflight:${canonical.error}`);
+  const playwright = await probeViaPlaywright(canonical.finalUrl);
   if (playwright.ok) return playwright;
   // Surface the reason in ops logs — a scan that silently degrades to
   // Firecrawl hides remote-browser misconfiguration otherwise.
   console.warn(`[render] playwright probe unavailable (${playwright.error}); falling back to firecrawl`);
 
-  const firecrawl = await probeViaFirecrawl(url);
+  const firecrawl = await probeViaFirecrawl(canonical.finalUrl);
   if (firecrawl.ok) return firecrawl;
 
   // Both failed — surface both errors so the stored signal says exactly why.

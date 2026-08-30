@@ -185,6 +185,8 @@ h1 em { font-style: italic; color: var(--accent); }
 }
 .email-report-row button:disabled { opacity: 0.6; cursor: wait; }
 .email-report .small { margin: 0.5rem 0 0; }
+.consent-row { display: flex; align-items: flex-start; gap: 0.5rem; margin-top: 0.65rem; color: var(--muted); }
+.consent-row input { flex: 0 0 auto; margin-top: 0.25rem; }
 
 .nav-scan {
   padding: 0.4rem 0.95rem !important; border-radius: 8px;
@@ -193,22 +195,15 @@ h1 em { font-style: italic; color: var(--accent); }
 }
 .nav-scan:hover { opacity: 0.9; }
 
-.report-gate { position: relative; }
-.gate-blur {
-  filter: blur(7px); pointer-events: none; user-select: none;
-  max-height: 70vh; overflow: hidden;
-  mask-image: linear-gradient(to bottom, black 55%, transparent 95%);
-  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 95%);
-}
+.report-gate { margin: 2rem 0; }
 .gate-panel {
-  position: absolute; top: 8rem; left: 50%; transform: translateX(-50%);
-  width: min(30rem, calc(100% - 2rem));
+  width: min(36rem, 100%); margin: 0 auto;
   background: var(--card); border: 1px solid var(--accent); border-radius: 14px;
   padding: 1.4rem 1.6rem; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
 }
 .gate-panel h2 { margin-top: 0; }
 .gate-panel form { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.8rem 0 0.4rem; }
-.gate-panel input {
+.gate-panel input[type="email"] {
   flex: 1; min-width: 200px; font: inherit; padding: 0.65rem 0.8rem;
   border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: inherit;
 }
@@ -284,5 +279,14 @@ th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color
 
 @media (max-width: 480px) {
   h1 { font-size: 1.55rem; }
-  .site-header nav { gap: 0.7rem; }
+  .site-header { align-items: flex-start; flex-direction: column; }
+  .site-header nav { width: 100%; gap: 0.55rem 0.8rem; flex-wrap: wrap; }
+  .nav-scan { padding: 0.3rem 0.7rem !important; }
+  table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .dist-row { grid-template-columns: 6.5rem minmax(0, 1fr); gap: 0.45rem; }
+  .dist-count { grid-column: 2; }
+  .cta-secondary { display: inline-block; margin: 0.8rem 0 0; }
+  .wrap { padding-left: 1rem; padding-right: 1rem; }
 }
+
+.evidence-dim a, .domain, .snippet { overflow-wrap: anywhere; }

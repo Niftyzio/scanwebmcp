@@ -18,6 +18,8 @@ The Ladder names five positions. A business sits on the highest rung it fully sa
 
 Rungs are gated: you cannot be Callable while Invisible — an endpoint nobody can discover doesn't count.
 
+**Rung 4 requires consented verification.** Transactable means completing a real action end to end. The public automated scan does not book, order, purchase or submit on a site's behalf without permission, so it assesses up to rung 3. Rung 4 is awarded only through a consented invocation test; an advertised transactional tool is not enough on its own.
+
 ## What is measured
 
 Five dimensions feed the rung. We publish *what we observe* — every scan lists its signals with the exact URL and timestamp behind each — while the weighting of observations into scores is the rubric's method, refined against the benchmark corpus and versioned with every scan.

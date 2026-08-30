@@ -50,11 +50,12 @@ export async function getBenchmark(
   composite: number | null,
   dims?: Partial<Record<DimKey, number | null>>,
 ): Promise<Benchmark> {
-  const { data } = await db()
+  const { data, error } = await db()
     .from("scans")
     .select("site_id, composite, rung, d1, d2, d3, d4, d5, created_at, sites!inner(sector, country, opt_out, domain)")
     .eq("status", "complete")
     .order("created_at", { ascending: false });
+  if (error) throw new Error(`Could not load benchmark scans: ${error.message}`);
 
   const latestPerSite = new Map<number, Row>();
   for (const r of (data ?? []) as unknown as (Row & { sites: { sector: string | null; country: string | null; opt_out: boolean; domain: string } })[]) {
@@ -146,19 +147,23 @@ export interface ObservatoryStats {
 
 export async function getObservatoryStats(): Promise<ObservatoryStats> {
   const supabase = db();
-  const [{ count: sites }, { count: scans }, { count: signalsStored }, { count: agentHits }] =
-    await Promise.all([
+  const countResults = await Promise.all([
       supabase.from("sites").select("*", { count: "exact", head: true }),
       supabase.from("scans").select("*", { count: "exact", head: true }),
       supabase.from("signals").select("*", { count: "exact", head: true }),
       supabase.from("agent_hits").select("*", { count: "exact", head: true }),
     ]);
+  for (const result of countResults) {
+    if (result.error) throw new Error(`Could not load observatory totals: ${result.error.message}`);
+  }
+  const [{ count: sites }, { count: scans }, { count: signalsStored }, { count: agentHits }] = countResults;
 
-  const { data: scanRows } = await supabase
+  const { data: scanRows, error: scanRowsError } = await supabase
     .from("scans")
     .select("id, site_id, rung, created_at, sites!inner(sector, opt_out, domain)")
     .eq("status", "complete")
     .order("created_at", { ascending: false });
+  if (scanRowsError) throw new Error(`Could not load observatory scans: ${scanRowsError.message}`);
 
   const latest = new Map<number, { id: number; rung: number | null; sector: string | null }>();
   for (const r of (scanRows ?? []) as unknown as { id: number; site_id: number; rung: number | null; sites: { sector: string | null; opt_out: boolean; domain: string } }[]) {
@@ -178,7 +183,7 @@ export async function getObservatoryStats(): Promise<ObservatoryStats> {
     }
   }
 
-  const { data: sigRows } = await supabase
+  const { data: sigRows, error: sigRowsError } = await supabase
     .from("signals")
     .select("scan_id, signal_key, value_bool, value_num, value_text")
     .in("scan_id", scanIds.length ? scanIds : [-1])
@@ -187,6 +192,7 @@ export async function getObservatoryStats(): Promise<ObservatoryStats> {
       "agent_access_blocked", "llms_txt", "structured_data_types",
       "mcp_probe_well_known", "mcp_probe_path", "webmcp_tools_found", "forms_as_latent_tools",
     ]);
+  if (sigRowsError) throw new Error(`Could not load observatory signals: ${sigRowsError.message}`);
 
   const perScan = new Map<number, Record<string, { b?: boolean | null; n?: number | null; t?: string | null }>>();
   for (const s of sigRows ?? []) {

@@ -12,6 +12,7 @@
  */
 
 import { probeWebMCP } from "./render";
+import { safeFetchText, validatePublicUrl } from "./safe-http";
 
 export const RUBRIC_VERSION = "1.0.0";
 export const SCANNER_UA =
@@ -68,64 +69,35 @@ interface FetchOutcome {
   contentType: string;
   body: string;
   finalUrl: string;
+  headers: Headers;
   error?: string;
 }
 
 async function politeFetch(
   url: string,
   ua: string = SCANNER_UA,
-  method: "GET" | "HEAD" = "GET",
+  method: "GET" | "HEAD" | "POST" = "GET",
+  request?: { headers?: Record<string, string>; body?: string },
 ): Promise<FetchOutcome> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      method,
-      redirect: "follow",
-      headers: { "User-Agent": ua, Accept: "*/*" },
-      signal: controller.signal,
-    });
-    const contentType = res.headers.get("content-type") ?? "";
-    let body = "";
-    if (method === "GET") {
-      const raw = await res.arrayBuffer();
-      body = new TextDecoder("utf-8", { fatal: false }).decode(
-        raw.slice(0, MAX_BODY_BYTES),
-      );
-    }
-    return { ok: res.ok, status: res.status, contentType, body, finalUrl: res.url };
-  } catch (e) {
-    return {
-      ok: false,
-      status: 0,
-      contentType: "",
-      body: "",
-      finalUrl: url,
-      error: e instanceof Error ? e.message : String(e),
-    };
-  } finally {
-    clearTimeout(timer);
-  }
+  return safeFetchText(url, {
+    method,
+    headers: { "User-Agent": ua, Accept: "*/*", ...request?.headers },
+    body: request?.body,
+    timeoutMs: FETCH_TIMEOUT_MS,
+    maxBodyBytes: MAX_BODY_BYTES,
+  });
 }
 
-/** Reject scans of private/internal targets before any fetch happens. */
+/** Reject syntactically private/internal targets before any fetch happens.
+ * DNS answers are pinned and revalidated by safeFetchText for every hop. */
 export function validateTarget(input: string): { origin: string; domain: string } {
-  let url: URL;
   try {
-    url = new URL(/^https?:\/\//i.test(input) ? input : `https://${input}`);
-  } catch {
-    throw new Error("Not a valid URL.");
+    const url = validatePublicUrl(/^https?:\/\//i.test(input) ? input : `https://${input}`);
+    return { origin: url.origin, domain: url.hostname.toLowerCase().replace(/\.$/, "") };
+  } catch (error) {
+    if (error instanceof TypeError) throw new Error("Not a valid URL.");
+    throw error;
   }
-  if (url.protocol !== "https:" && url.protocol !== "http:")
-    throw new Error("Only http(s) targets can be scanned.");
-  const host = url.hostname.toLowerCase();
-  const privatePatterns = [
-    /^localhost$/, /^127\./, /^10\./, /^192\.168\./, /^169\.254\./,
-    /^172\.(1[6-9]|2\d|3[01])\./, /^0\./, /^\[?::1\]?$/, /\.local$/, /\.internal$/,
-  ];
-  if (privatePatterns.some((p) => p.test(host)) || !host.includes("."))
-    throw new Error("Private and internal hosts cannot be scanned.");
-  return { origin: url.origin, domain: host };
 }
 
 const looksLikeHtml = (body: string) =>
@@ -137,15 +109,37 @@ const snippet = (s: string, n = 500) => s.replace(/\s+/g, " ").trim().slice(0, n
 // D1 · Legibility
 // ---------------------------------------------------------------------------
 
-function parseRobots(body: string): Record<string, "allowed" | "blocked" | "unmentioned"> {
-  const verdicts: Record<string, "allowed" | "blocked" | "unmentioned"> = {};
-  // Group robots.txt into UA-block sections (consecutive user-agent lines share rules).
-  const sections: { agents: string[]; rules: string[] }[] = [];
-  let current: { agents: string[]; rules: string[] } | null = null;
+type RobotsVerdict = "allowed" | "blocked" | "unmentioned";
+interface RobotsRule { allow: boolean; path: string }
+interface RobotsSection { agents: string[]; rules: RobotsRule[] }
+
+export interface RobotsPolicy {
+  isAllowed(userAgent: string, urlOrPath: string): boolean;
+  verdict(userAgent: string, urlOrPath?: string): RobotsVerdict;
+}
+
+function robotsPathMatches(rule: string, path: string): boolean {
+  if (!rule) return false;
+  const anchored = rule.endsWith("$");
+  const source = rule
+    .replace(/\$$/, "")
+    .split("*")
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join(".*");
+  return new RegExp(`^${source}${anchored ? "$" : ""}`).test(path);
+}
+
+export function parseRobots(body: string): RobotsPolicy {
+  // Consecutive User-agent lines share a group; only Allow/Disallow affect access.
+  const sections: RobotsSection[] = [];
+  let current: RobotsSection | null = null;
   let lastWasAgent = false;
   for (const rawLine of body.split(/\r?\n/)) {
     const line = rawLine.replace(/#.*$/, "").trim();
-    if (!line) continue;
+    if (!line) {
+      lastWasAgent = false;
+      continue;
+    }
     const m = line.match(/^user-agent:\s*(.+)$/i);
     if (m) {
       if (!current || !lastWasAgent) {
@@ -155,24 +149,78 @@ function parseRobots(body: string): Record<string, "allowed" | "blocked" | "unme
       current.agents.push(m[1].trim());
       lastWasAgent = true;
     } else if (current) {
-      current.rules.push(line);
+      const rule = line.match(/^(allow|disallow):\s*(.*)$/i);
+      if (rule) current.rules.push({ allow: rule[1].toLowerCase() === "allow", path: rule[2].trim() });
       lastWasAgent = false;
     }
   }
-  for (const bot of AI_BOTS) {
-    const specific = sections.filter((s) =>
-      s.agents.some((a) => a.toLowerCase() === bot.toLowerCase()),
+
+  function matchingSections(userAgent: string) {
+    const product = userAgent.split(/[\s/]/, 1)[0].toLowerCase();
+    const matches = sections.flatMap((section) =>
+      section.agents
+        .map((agent) => agent.toLowerCase())
+        .filter((agent) => agent === "*" || product.includes(agent))
+        .map((agent) => ({ section, specificity: agent === "*" ? 0 : agent.length })),
     );
-    if (specific.length === 0) {
-      verdicts[bot] = "unmentioned";
-      continue;
-    }
-    const blockedAll = specific.some((s) =>
-      s.rules.some((r) => /^disallow:\s*\/\s*$/i.test(r)),
-    );
-    verdicts[bot] = blockedAll ? "blocked" : "allowed";
+    const best = Math.max(-1, ...matches.map((match) => match.specificity));
+    return matches.filter((match) => match.specificity === best).map((match) => match.section);
   }
-  return verdicts;
+
+  function pathFrom(urlOrPath: string) {
+    try {
+      const url = new URL(urlOrPath, "https://robots.invalid");
+      return `${url.pathname}${url.search}`;
+    } catch {
+      return "/";
+    }
+  }
+
+  return {
+    isAllowed(userAgent, urlOrPath) {
+      const path = pathFrom(urlOrPath);
+      const matchingRules = matchingSections(userAgent)
+        .flatMap((section) => section.rules)
+        .filter((rule) => robotsPathMatches(rule.path, path));
+      if (matchingRules.length === 0) return true;
+      const longest = Math.max(...matchingRules.map((rule) => rule.path.replace(/\$$/, "").length));
+      // At equal specificity Allow wins, as required by the robots protocol.
+      return matchingRules.some((rule) => rule.allow && rule.path.replace(/\$$/, "").length === longest);
+    },
+    verdict(userAgent, urlOrPath = "/") {
+      const explicit = sections.some((section) =>
+        section.agents.some((agent) => agent.toLowerCase() === userAgent.toLowerCase()),
+      );
+      if (!explicit) return "unmentioned";
+      return this.isAllowed(userAgent, urlOrPath) ? "allowed" : "blocked";
+    },
+  };
+}
+
+const ALLOW_ALL_ROBOTS: RobotsPolicy = {
+  isAllowed: () => true,
+  verdict: () => "unmentioned",
+};
+
+async function policyFetch(
+  url: string,
+  policy: RobotsPolicy,
+  ua: string = SCANNER_UA,
+  method: "GET" | "HEAD" | "POST" = "GET",
+  request?: { headers?: Record<string, string>; body?: string },
+): Promise<FetchOutcome> {
+  if (!policy.isAllowed(SCANNER_UA, url)) {
+    return {
+      ok: false,
+      status: 0,
+      contentType: "",
+      body: "",
+      finalUrl: url,
+      headers: new Headers(),
+      error: "Blocked by robots.txt for AgentSurfaceScan.",
+    };
+  }
+  return politeFetch(url, ua, method, request);
 }
 
 async function checkD1(origin: string, signals: Signal[], errors: string[]) {
@@ -181,21 +229,38 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
   // robots.txt — AI-agent directives
   const robots = await politeFetch(`${origin}/robots.txt`);
   const robotsIsText = robots.ok && !looksLikeHtml(robots.body);
-  const verdicts = robotsIsText ? parseRobots(robots.body) : {};
+  const robotsPolicy = robotsIsText ? parseRobots(robots.body) : ALLOW_ALL_ROBOTS;
   for (const bot of AI_BOTS) {
     signals.push({
       dimension: "D1",
       signalKey: `robots_${bot.toLowerCase().replace(/-/g, "_")}`,
-      valueText: robotsIsText ? verdicts[bot] : "no_robots_txt",
+      valueText: robotsIsText ? robotsPolicy.verdict(bot) : "no_robots_txt",
       evidenceUrl: `${origin}/robots.txt`,
       evidenceSnippet: robotsIsText ? snippet(robots.body, 300) : undefined,
       observedAt: now(),
     });
   }
 
+  const scannerAllowed = robotsPolicy.isAllowed(SCANNER_UA, "/");
+  signals.push({
+    dimension: "D1",
+    signalKey: "robots_scanner",
+    valueBool: scannerAllowed,
+    valueText: robotsIsText ? (scannerAllowed ? "allowed" : "blocked") : "no_robots_txt",
+    evidenceUrl: `${origin}/robots.txt`,
+    evidenceSnippet: robotsIsText ? snippet(robots.body, 300) : undefined,
+    observedAt: now(),
+  });
+
   // llms.txt / llms-full.txt — must parse as text, not a soft-404 HTML page
-  for (const file of ["llms.txt", "llms-full.txt"]) {
-    const r = await politeFetch(`${origin}/${file}`);
+  const [llms, llmsFull, sitemap, asBot, asBrowser] = await Promise.all([
+    policyFetch(`${origin}/llms.txt`, robotsPolicy),
+    policyFetch(`${origin}/llms-full.txt`, robotsPolicy),
+    policyFetch(`${origin}/sitemap.xml`, robotsPolicy),
+    policyFetch(`${origin}/`, robotsPolicy, SCANNER_UA),
+    policyFetch(`${origin}/`, robotsPolicy, BROWSER_UA),
+  ]);
+  for (const [file, r] of [["llms.txt", llms], ["llms-full.txt", llmsFull]] as const) {
     const genuine = r.ok && !looksLikeHtml(r.body) && r.body.trim().length > 40;
     signals.push({
       dimension: "D1",
@@ -209,7 +274,6 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
   }
 
   // sitemap.xml
-  const sitemap = await politeFetch(`${origin}/sitemap.xml`);
   const sitemapGenuine =
     sitemap.ok && /<(urlset|sitemapindex)[\s>]/i.test(sitemap.body.slice(0, 2000));
   signals.push({
@@ -221,8 +285,7 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
   });
 
   // Homepage — two UAs, to separate thin content / bot walls / agent negotiation
-  const asBot = await politeFetch(`${origin}/`, SCANNER_UA);
-  const asBrowser = await politeFetch(`${origin}/`, BROWSER_UA);
+  if (!scannerAllowed) errors.push("Homepage not fetched because robots.txt blocks AgentSurfaceScan.");
   if (!asBot.ok && !asBrowser.ok)
     errors.push(`Homepage unreachable (${asBot.error ?? asBot.status}).`);
 
@@ -230,15 +293,15 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
   // content produced confidently wrong zeros (observed 29 Aug: Cloudflare
   // "Just a moment..." on a 403 served to our production IP).
   const challengeMarkers = /just a moment|attention required|access denied|are you a robot|cf-challenge|_cf_chl|captcha-delivery|px-captcha|incapsula/i;
-  const bothBlocked =
+  const bothBlocked = !scannerAllowed ||
     (!asBot.ok || challengeMarkers.test(asBot.body.slice(0, 3000))) &&
     (!asBrowser.ok || challengeMarkers.test(asBrowser.body.slice(0, 3000)));
   if (bothBlocked) {
     signals.push({
       dimension: "D1",
-      signalKey: "agent_access_blocked",
+      signalKey: scannerAllowed ? "agent_access_blocked" : "scanner_access_blocked",
       valueBool: true,
-      valueText: `http_${asBot.status}`,
+      valueText: scannerAllowed ? `http_${asBot.status}` : "robots_txt",
       evidenceUrl: `${origin}/`,
       evidenceSnippet: snippet(asBot.body || asBrowser.body || `status ${asBot.status}`, 300),
       observedAt: now(),
@@ -321,7 +384,7 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
     observedAt: now(),
   });
 
-  return { html, negotiated, types };
+  return { html, negotiated, types, robotsPolicy };
 }
 
 // ---------------------------------------------------------------------------
@@ -342,14 +405,19 @@ const PAGE_TYPES: { type: string; words: string[] }[] = [
 // Content sections are never canonical pages for a page-type.
 const EXCLUDED_SECTIONS = /\/(insights?|blog|news|articles?|case-stud|resources?|events?|press|careers?|podcast)(\/|$)/i;
 
-function discoverPages(origin: string, homepageHtml: string): Map<string, string> {
+export function discoverPages(origin: string, homepageHtml: string): Map<string, string> {
   const found = new Map<string, string>();
-  const hrefs = [...new Set(
-    [...homepageHtml.matchAll(/href=["']([^"'#?]+)["']/gi)]
-      .map((m) => m[1])
-      .filter((h) => h.startsWith("/") || h.startsWith(origin))
-      .map((h) => (h.startsWith("/") ? origin + h : h)),
-  )];
+  const hrefs = [...new Set([...homepageHtml.matchAll(/href=["']([^"'#?]+)["']/gi)]
+    .flatMap((match) => {
+      try {
+        const candidate = new URL(match[1], origin);
+        if (candidate.origin !== origin || candidate.username || candidate.password) return [];
+        candidate.hash = "";
+        return [candidate.toString()];
+      } catch {
+        return [];
+      }
+    }))];
   const candidates = hrefs.flatMap((h) => {
     try {
       const path = new URL(h).pathname.toLowerCase();
@@ -389,6 +457,7 @@ async function checkPageSet(
   origin: string,
   homepageHtml: string,
   signals: Signal[],
+  robotsPolicy: RobotsPolicy,
 ): Promise<string[]> {
   const now = () => new Date().toISOString();
   const pages = discoverPages(origin, homepageHtml);
@@ -407,8 +476,10 @@ async function checkPageSet(
   }
 
   let combinedHtml = homepageHtml;
-  for (const [type, url] of pages) {
-    const r = await politeFetch(url);
+  const fetchedPages = await Promise.all(
+    [...pages].map(async ([type, url]) => ({ type, url, response: await policyFetch(url, robotsPolicy) })),
+  );
+  for (const { type, url, response: r } of fetchedPages) {
     if (!r.ok) continue;
     scanned.push(url);
     combinedHtml += "\n" + r.body;
@@ -443,7 +514,7 @@ async function checkPageSet(
     }
   }
 
-  signals.push(await detectContentLibrary(origin, homepageHtml));
+  signals.push(await detectContentLibrary(origin, homepageHtml, robotsPolicy));
 
   // Signals over everything fetched
   const forms = (combinedHtml.match(/<form[\s>]/gi) ?? []).length;
@@ -517,10 +588,18 @@ async function checkPageSet(
 export async function detectContentLibrary(
   origin: string,
   homepageHtml: string,
+  robotsPolicy: RobotsPolicy = ALLOW_ALL_ROBOTS,
 ): Promise<Signal> {
   const contentLinks = new Set(
     [...homepageHtml.matchAll(/href=["']([^"'#?]+)["']/gi)]
       .map((m) => m[1])
+      .filter((href) => {
+        try {
+          return new URL(href, origin).origin === origin;
+        } catch {
+          return false;
+        }
+      })
       .filter((h) =>
         /\/(insights?|blog|guides?|resources?|articles?|knowledge|case-stud|publications?|whitepapers?)(\/|$)/i.test(h),
       ),
@@ -534,7 +613,7 @@ export async function detectContentLibrary(
   const sectionSeg = [...contentLinks]
     .map((h) => {
       try {
-        const path = new URL(h.startsWith("/") ? origin + h : h).pathname;
+        const path = new URL(h, origin).pathname;
         return path.split("/").filter(Boolean).find((seg) =>
           /^(insights?|blog|guides?|resources?|articles?|knowledge|case-studies|publications?|whitepapers?|news)$/i.test(seg),
         );
@@ -548,11 +627,19 @@ export async function detectContentLibrary(
     // when the index page renders its list client-side (observed: a law
     // firm's insights index with zero article links in raw HTML).
     const CONTENT_PATH = /\/(insights?|blog|guides?|resources?|articles?|knowledge|case-studies|publications?|whitepapers?|news)\//i;
-    let sitemapBody = (await politeFetch(`${origin}/sitemap.xml`)).body;
+    let sitemapBody = (await policyFetch(`${origin}/sitemap.xml`, robotsPolicy)).body;
     if (/<sitemapindex/i.test(sitemapBody)) {
-      const children = [...sitemapBody.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
+      const children = [...sitemapBody.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)]
+        .map((m) => m[1])
+        .filter((url) => {
+          try {
+            return new URL(url, origin).origin === origin;
+          } catch {
+            return false;
+          }
+        });
       const preferred = children.find((u) => CONTENT_PATH.test(u)) ?? children[0];
-      if (preferred) sitemapBody = (await politeFetch(preferred)).body;
+      if (preferred) sitemapBody = (await policyFetch(preferred, robotsPolicy)).body;
     }
     const contentUrls = [...sitemapBody.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)]
       .map((m) => m[1])
@@ -581,7 +668,11 @@ export async function detectContentLibrary(
 
 /** Fetch a homepage the way the scanner does — for backfill scripts only. */
 export async function fetchHomepageForBackfill(origin: string) {
-  return politeFetch(`${origin}/`);
+  const robots = await politeFetch(`${origin}/robots.txt`);
+  const robotsPolicy = robots.ok && !looksLikeHtml(robots.body)
+    ? parseRobots(robots.body)
+    : ALLOW_ALL_ROBOTS;
+  return { ...(await policyFetch(`${origin}/`, robotsPolicy)), robotsPolicy };
 }
 
 // ---------------------------------------------------------------------------
@@ -638,7 +729,106 @@ export function detectCountry(html: string | null, domain: string): string | nul
 // D3 · Callability — validated probes, never bare status codes
 // ---------------------------------------------------------------------------
 
-async function checkD3(origin: string, signals: Signal[], skipRender = false) {
+export function parseJsonRpcBody(body: string): Record<string, unknown> | null {
+  const candidates = [body, ...body.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim())];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    } catch {
+      // Try the next SSE data line.
+    }
+  }
+  return null;
+}
+
+function sameOriginEndpoint(value: unknown, origin: string): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const endpoint = new URL(value, origin);
+    return endpoint.origin === origin ? endpoint.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function endpointsFromDiscovery(value: unknown, origin: string): string[] {
+  const found = new Set<string>();
+  const visit = (node: unknown, key = "", depth = 0) => {
+    if (depth > 5) return;
+    if (typeof node === "string" && /(url|endpoint|uri|mcp)/i.test(key)) {
+      const endpoint = sameOriginEndpoint(node, origin);
+      if (endpoint) found.add(endpoint);
+      return;
+    }
+    if (Array.isArray(node)) return node.forEach((item) => visit(item, key, depth + 1));
+    if (node && typeof node === "object") {
+      for (const [childKey, child] of Object.entries(node)) visit(child, childKey, depth + 1);
+    }
+  };
+  visit(value);
+  return [...found];
+}
+
+interface McpHandshake {
+  connected: boolean;
+  tools: string[];
+  error?: string;
+}
+
+async function probeMcpEndpoint(endpoint: string, robotsPolicy: RobotsPolicy): Promise<McpHandshake> {
+  const commonHeaders = {
+    Accept: "application/json, text/event-stream",
+    "Content-Type": "application/json",
+  };
+  const initialize = await policyFetch(endpoint, robotsPolicy, SCANNER_UA, "POST", {
+    headers: commonHeaders,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "AgentSurfaceScan", version: "0.1" },
+      },
+    }),
+  });
+  const initialized = parseJsonRpcBody(initialize.body);
+  const initResult = initialized?.result;
+  if (!initialize.ok || !initResult || typeof initResult !== "object") {
+    return { connected: false, tools: [], error: initialize.error ?? `initialize_http_${initialize.status}` };
+  }
+
+  const session = initialize.headers.get("mcp-session-id");
+  const sessionHeaders = session ? { ...commonHeaders, "MCP-Session-Id": session } : commonHeaders;
+  await policyFetch(endpoint, robotsPolicy, SCANNER_UA, "POST", {
+    headers: sessionHeaders,
+    body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+  });
+  const listed = await policyFetch(endpoint, robotsPolicy, SCANNER_UA, "POST", {
+    headers: sessionHeaders,
+    body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
+  });
+  const response = parseJsonRpcBody(listed.body);
+  const result = response?.result;
+  const tools = result && typeof result === "object" && Array.isArray((result as { tools?: unknown }).tools)
+    ? (result as { tools: unknown[] }).tools
+      .map((tool) => tool && typeof tool === "object" ? (tool as { name?: unknown }).name : undefined)
+      .filter((name): name is string => typeof name === "string" && name.length > 0)
+    : [];
+  if (!listed.ok || !result || typeof result !== "object" || !Array.isArray((result as { tools?: unknown }).tools)) {
+    return { connected: true, tools: [], error: listed.error ?? `tools_list_http_${listed.status}` };
+  }
+  return { connected: true, tools };
+}
+
+async function checkD3(
+  origin: string,
+  signals: Signal[],
+  robotsPolicy: RobotsPolicy,
+  skipRender = false,
+) {
   const now = () => new Date().toISOString();
   // Discovery has no settled standard — three live drafts, three paths
   // (SEP-1649/2127: mcp.json, SEP-1960: mcp, IETF draft: mcp-server).
@@ -647,34 +837,43 @@ async function checkD3(origin: string, signals: Signal[], skipRender = false) {
     ["mcp_probe_well_known", ["/.well-known/mcp.json", "/.well-known/mcp", "/.well-known/mcp-server"]],
     ["mcp_probe_path", ["/mcp"]],
   ];
-  for (const [signalKey, paths] of probeGroups) {
-    let best: { path: string; ok: boolean; plausible: boolean } | undefined;
-    for (const path of paths) {
-      const r = await politeFetch(`${origin}${path}`);
-      // Validation: an MCP endpoint answers with JSON (or SSE), never an HTML page.
-      const contentPlausible =
-        r.ok &&
-        !looksLikeHtml(r.body) &&
-        (/json|event-stream/i.test(r.contentType) || /"jsonrpc"/.test(r.body));
-      const candidate = { path, ok: r.ok, plausible: contentPlausible };
-      // Rank: plausible endpoint > responds-but-not-mcp > absent.
-      if (!best || (candidate.plausible && !best.plausible) || (candidate.ok && !best.ok)) best = candidate;
-      if (candidate.plausible) break;
+  const renderPromise = skipRender ? null : probeWebMCP(`${origin}/`);
+  const mcpSignals = await Promise.all(probeGroups.map(async ([signalKey, paths]): Promise<Signal> => {
+    const discoveries = await Promise.all(paths.map(async (path) => ({ path, response: await policyFetch(`${origin}${path}`, robotsPolicy) })));
+    const endpointCandidates = new Set<string>();
+    for (const { path, response } of discoveries) {
+      if (path === "/mcp") endpointCandidates.add(`${origin}${path}`);
+      if (response.ok && !looksLikeHtml(response.body)) {
+        try {
+          for (const endpoint of endpointsFromDiscovery(JSON.parse(response.body), origin)) endpointCandidates.add(endpoint);
+        } catch {
+          // A discovery response is only a hint; callability requires the handshake below.
+        }
+        if (/json|event-stream/i.test(response.contentType) || /"jsonrpc"/.test(response.body)) {
+          endpointCandidates.add(`${origin}${path}`);
+        }
+      }
     }
-    if (!best) continue;
-    signals.push({
+    const handshakes = await Promise.all([...endpointCandidates].map(async (endpoint) => ({ endpoint, result: await probeMcpEndpoint(endpoint, robotsPolicy) })));
+    const best = handshakes.find(({ result }) => result.tools.length > 0) ?? handshakes.find(({ result }) => result.connected);
+    const fallbackPath = discoveries.find(({ response }) => response.ok)?.path ?? paths[0];
+    return {
       dimension: "D3",
       signalKey,
-      valueBool: best.plausible,
-      valueText: !best.ok
-        ? "absent"
-        : best.plausible
-          ? "plausible_endpoint"
-          : "responds_but_not_mcp", // e.g. a login page on 200 — observed in the wild
-      evidenceUrl: `${origin}${best.path}`,
+      valueBool: Boolean(best && best.result.tools.length > 0),
+      valueNum: best?.result.tools.length ?? 0,
+      valueText: best
+        ? best.result.tools.length > 0
+          ? `handshake_ok:${best.result.tools.slice(0, 25).join("|")}`
+          : `handshake_connected_no_tools${best.result.error ? `:${best.result.error}` : ""}`
+        : discoveries.some(({ response }) => response.ok)
+          ? "responds_but_handshake_failed"
+          : "absent",
+      evidenceUrl: best?.endpoint ?? `${origin}${fallbackPath}`,
       observedAt: now(),
-    });
-  }
+    };
+  }));
+  signals.push(...mcpSignals);
   // WebMCP detection needs a rendered DOM — renderer behind an interface
   // (lib/render.ts, Firecrawl keyless in v0). Failure means "not checked",
   // never "absent".
@@ -688,33 +887,44 @@ async function checkD3(origin: string, signals: Signal[], skipRender = false) {
     });
     return;
   }
-  const probe = await probeWebMCP(`${origin}/`);
+  const probe = await renderPromise!;
   const verdict = !probe.ok
     ? `render_unavailable:${probe.error ?? "unknown"}`
-    : probe.toolNames.length > 0
-      ? probe.modelContextPresent
-        ? "active_tools_found"
-        : "manifest_found"
+    : probe.activeToolNames.length > 0
+      ? "active_tools_found"
+      : probe.declaredToolNames.length > 0
+        ? "manifest_declared_unverified"
       : probe.registrationCodeDetected
-        ? "registration_code_found"
+        ? "registration_code_unverified"
         : "none_detected";
   signals.push({
     dimension: "D3",
     signalKey: "webmcp_registration",
     valueText: verdict,
-    valueBool: probe.ok ? probe.toolNames.length > 0 || probe.registrationCodeDetected : undefined,
+    valueBool: probe.ok ? probe.activeToolNames.length > 0 : undefined,
     evidenceUrl: `${origin}/`,
     evidenceSnippet: probe.renderer ? `Rendered via ${probe.renderer}` : undefined,
     observedAt: now(),
   });
-  if (probe.toolNames.length > 0) {
+  if (probe.activeToolNames.length > 0) {
     signals.push({
       dimension: "D3",
       signalKey: "webmcp_tools_found",
-      valueNum: probe.toolNames.length,
-      valueText: probe.toolNames.slice(0, 25).join("|"),
+      valueNum: probe.activeToolNames.length,
+      valueText: probe.activeToolNames.slice(0, 25).join("|"),
       evidenceUrl: `${origin}/`,
-      evidenceSnippet: `Declared tool manifest: ${probe.toolNames.slice(0, 25).join(", ")}`,
+      evidenceSnippet: `Live browser registrations: ${probe.activeToolNames.slice(0, 25).join(", ")}`,
+      observedAt: now(),
+    });
+  }
+  if (probe.declaredToolNames.length > 0) {
+    signals.push({
+      dimension: "D3",
+      signalKey: "webmcp_tools_declared",
+      valueNum: probe.declaredToolNames.length,
+      valueText: probe.declaredToolNames.slice(0, 25).join("|"),
+      evidenceUrl: `${origin}/`,
+      evidenceSnippet: `Unverified page manifest: ${probe.declaredToolNames.slice(0, 25).join(", ")}`,
       observedAt: now(),
     });
   }
@@ -742,7 +952,7 @@ export const REFERENCE_SCORING: ScoringConfig = {
   gates: { readable_d1_min: 40, answerable_d2_min: 50, blocked_bots_invisible: 3 },
 };
 
-function score(signals: Signal[], cfg: ScoringConfig = REFERENCE_SCORING) {
+export function score(signals: Signal[], cfg: ScoringConfig = REFERENCE_SCORING) {
   // D1 (0-100)
   let d1 = 0;
   const blockedBots = AI_BOTS.filter(
@@ -772,8 +982,7 @@ function score(signals: Signal[], cfg: ScoringConfig = REFERENCE_SCORING) {
   const mcpFound =
     sig(signals, "mcp_probe_well_known")?.valueBool || sig(signals, "mcp_probe_path")?.valueBool;
   const webmcpFound =
-    (sig(signals, "webmcp_tools_found")?.valueNum ?? 0) > 0 ||
-    sig(signals, "webmcp_registration")?.valueBool === true;
+    (sig(signals, "webmcp_tools_found")?.valueNum ?? 0) > 0;
   if (mcpFound) d3 += 50;
   if (webmcpFound) d3 += 50;
   d3 = Math.min(d3, 100);
@@ -821,19 +1030,21 @@ export async function runScan(input: string, scoring?: ScoringConfig): Promise<S
   const signals: Signal[] = [];
   const errors: string[] = [];
 
-  const { html } = await checkD1(origin, signals, errors);
-  const degraded = signals.some((s) => s.signalKey === "agent_access_blocked" && s.valueBool);
+  const { html, robotsPolicy } = await checkD1(origin, signals, errors);
+  const degraded = signals.some((s) =>
+    ["agent_access_blocked", "scanner_access_blocked"].includes(s.signalKey) && s.valueBool,
+  );
 
   if (degraded) {
     // Do not fabricate D2–D5 measurements from a challenge page. What we CAN
     // honestly report: reachability of the text files, robots verdicts, and
     // the block itself — which for an agent is the finding.
     const startedSignals = signals.filter((s) =>
-      ["robots_", "llms_", "sitemap_xml", "agent_access_blocked"].some((p) => s.signalKey.startsWith(p)),
+      ["robots_", "llms_", "sitemap_xml", "agent_access_blocked", "scanner_access_blocked"].some((p) => s.signalKey.startsWith(p)),
     );
     signals.length = 0;
     signals.push(...startedSignals);
-    await checkD3(origin, signals, true); // fixed-path probes only; no render on a walled site
+    await checkD3(origin, signals, robotsPolicy, true); // fixed-path probes only; no render on a walled site
     return {
       domain,
       rubricVersion: RUBRIC_VERSION,
@@ -844,14 +1055,19 @@ export async function runScan(input: string, scoring?: ScoringConfig): Promise<S
       scores: { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0, composite: 0 },
       signals,
       pagesScanned: [`${origin}/`],
-      errors: [...errors, "Scan degraded: the site served our agent a bot-challenge page instead of content. Unmeasured dimensions are reported as unmeasured, not zero."],
+      errors: [...errors, "Scan degraded: robots.txt or the site itself denied our scanner access. Unmeasured dimensions are reported as unmeasured, not zero."],
       degraded: true,
       countryGuess: detectCountry(null, domain), // a challenge page proves nothing about location
     };
   }
 
-  const pagesScanned = await checkPageSet(origin, html, signals);
-  await checkD3(origin, signals);
+  const pageSignals: Signal[] = [];
+  const d3Signals: Signal[] = [];
+  const [pagesScanned] = await Promise.all([
+    checkPageSet(origin, html, pageSignals, robotsPolicy),
+    checkD3(origin, d3Signals, robotsPolicy),
+  ]);
+  signals.push(...pageSignals, ...d3Signals);
 
   const { scores, rung, rungName } = score(signals, scoring);
   return {

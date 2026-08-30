@@ -1,27 +1,60 @@
 # Agent Surface Scan
 
-Enter a URL → get a live, dated, evidenced answer to: **which of this business's capabilities could an AI agent call today?**
+Enter a URL and get a dated, evidenced answer to: **which of this business's capabilities can an AI agent call today?**
 
-Built for the [OpenAI WebMCP Challenge](https://webmcp.devpost.com/), Aug–Sep 2026. The scan scores sites against the [Agent Surface Ladder v1.0](content/ladder.md) — Invisible → Readable → Answerable → Callable → Transactable — and the result page is itself a WebMCP surface: open it in ChatGPT's in-app browser and the agent can walk the findings, pull the evidence, and trigger re-scans through registered tools, on the same page you're looking at.
+The scan scores public websites against the [Agent Surface Ladder v1.0](content/ladder.md): Invisible → Readable → Answerable → Callable → Transactable. Result pages expose a public summary through WebMCP tools. Full findings and evidence become available to the page and its agent tools only after the visitor requests the report by email.
 
-## How it works
+## What the scanner verifies
 
-- `lib/engine.ts` — the signal engine. Plain-HTTP fetches only (no headless rendering in v0): robots.txt agent directives, llms.txt with soft-404 detection, sitemap, validated MCP endpoint probes (a 200 that serves a login page is not an endpoint), structured-data depth, agent-facing content negotiation, page-set discovery (pricing/services/FAQ/contact/about — capped at 6 pages per scan), forms-as-latent-tools, contact affordances, friction markers.
-- Every signal is stored with its evidence URL, snippet, and timestamp. Verdicts are validated content, never bare status codes.
-- Rungs are gated (you cannot be Callable while Invisible). This repo ships a reference scoring configuration; the hosted instance loads its current scoring from a private, versioned rubric store.
+- Public-network HTTP only. DNS answers are checked and pinned; private, reserved and internal ranges are refused on the initial request and every redirect.
+- `robots.txt` is parsed and enforced for `AgentSurfaceScan`, including wildcard groups and path-level Allow/Disallow precedence.
+- `llms.txt`, sitemap, server-rendered content, structured data and a same-origin page set capped at six pages.
+- MCP only counts after a real `initialize` and `tools/list` exchange returns tools.
+- WebMCP only counts after the browser protocol witnesses live registrations. A manifest or code pattern is stored as an unverified declaration and does not raise the rung.
+- Every signal is stored with its evidence URL, bounded public snippet and observation time.
 
-## Scanner conduct
+The public scan caps at Callable. Transactable requires a separately consented end-to-end invocation, because the scanner will not place orders, make bookings or submit third-party forms uninvited.
 
-Public pages only, ≤6 pages per scan, 10s timeouts, private/internal hosts refused, declared user agent (`AgentSurfaceScan/0.1`), robots.txt respected, one scan per domain per day unless a re-scan is requested. Opt-out: see `/opt-out` on the live site.
+Outbound work is parallelised and individually bounded so a scan remains inside the 60-second route budget. Renderer failure becomes an explicit unmeasured signal and a recoverable queue item.
 
-## Run it
+## Local development
 
+Node 22 or newer is required.
+
+```sh
+nvm use
+npm ci
+cp .env.local.example .env.local
+npm run dev
 ```
-npm install
-npx tsx scripts/smoke.ts example.com   # CLI smoke test of the engine
-npm run dev                            # web app
+
+Useful checks:
+
+```sh
+npm test
+npm run typecheck
+npm run build
+npm run check
+npx tsx scripts/smoke.ts example.com
 ```
+
+## Database and scheduled jobs
+
+The complete baseline and forward migrations live in [`supabase/migrations`](supabase/migrations). For a fresh local database, install Docker and run:
+
+```sh
+supabase start
+supabase db reset
+```
+
+The hosted scheduler calls the protected scan and email-retry routes. Its bearer value is read from Supabase Vault rather than embedded in `cron.job`; see [`supabase/README.md`](supabase/README.md) before applying the scheduling migration.
+
+## Email and privacy
+
+The score, rung and dimension summary remain public. Full findings, timestamped evidence and ranked recommendations are server-gated by default: they are not rendered into the locked page or returned by its scan API. After a report request is captured, a signed per-report cookie unlocks the browser and the email contains a time-limited signed link to the same report. WebMCP and MCP tools stop at the same wall and instruct the assistant to ask whether the human wants the report emailed before requesting an address or calling `email_report`.
+
+Report delivery is transactional and stored before sending. Failed delivery is truthfully returned as queued and retried with a stable provider idempotency key. Benchmark updates are a separate unchecked opt-in and remain disabled until the recipient confirms by email. Raw IP addresses are never stored; salted hashes are used only for shared rate limits. Production requires an independent `REPORT_ACCESS_SECRET`; `REPORT_GATE=off` is reserved for an intentional open-report campaign.
 
 ## License
 
-[AGPL-3.0](LICENSE). The Agent Surface Ladder rubric text is © Sara Simeone, published at the live site; the benchmark data collected by the hosted instance is not part of this repository.
+[AGPL-3.0](LICENSE). The Agent Surface Ladder rubric text is © Sara Simeone. The hosted benchmark corpus and its private seed composition are not part of this repository.

@@ -81,7 +81,7 @@ async function main() {
             const { origin } = validateTarget(t.sites.domain);
             const home = await fetchHomepageForBackfill(origin);
             if (!home.ok) throw new Error(`homepage now unreachable (${home.status})`);
-            const signal = await detectContentLibrary(origin, home.body);
+            const signal = await detectContentLibrary(origin, home.body, home.robotsPolicy);
             tally[signal.valueText ?? "?"] = (tally[signal.valueText ?? "?"] ?? 0) + 1;
 
             if (!DRY_RUN) {
@@ -104,10 +104,11 @@ async function main() {
                 (signal.valueNum ?? 0) >= 8 ||
                 signal.valueText === "section_exists_articles_not_enumerable";
               if (libraryRelevant) {
-                const { data: sigRows } = await supabase
+                const { data: sigRows, error: sigReadError } = await supabase
                   .from("signals")
                   .select("*")
                   .eq("scan_id", t.id);
+                if (sigReadError) throw new Error(`signal read failed: ${sigReadError.message}`);
                 const r = {
                   rung: t.rung,
                   signals: (sigRows ?? []).map((row) => ({
@@ -122,8 +123,9 @@ async function main() {
                 } as unknown as ScanResultLike;
                 const opportunities = pickOpportunities(r);
                 if (opportunities.some((o) => o.templateKey.startsWith("content_library"))) {
-                  await supabase.from("opportunities").delete().eq("scan_id", t.id);
-                  await supabase.from("opportunities").insert(
+                  const { error: deleteError } = await supabase.from("opportunities").delete().eq("scan_id", t.id);
+                  if (deleteError) throw new Error(`opportunity delete failed: ${deleteError.message}`);
+                  const { error: insertError } = await supabase.from("opportunities").insert(
                     opportunities.map((o) => ({
                       scan_id: t.id,
                       rank: o.rank,
@@ -133,6 +135,7 @@ async function main() {
                       ease: o.ease,
                     })),
                   );
+                  if (insertError) throw new Error(`opportunity insert failed: ${insertError.message}`);
                   regenerated++;
                 }
               }

@@ -8,10 +8,11 @@ export const revalidate = 300;
 
 async function CorpusCounter() {
   try {
-    const { count } = await db()
+    const { count, error } = await db()
       .from("sites")
       .select("*", { count: "exact", head: true })
       .eq("opt_out", false);
+    if (error) throw error;
     if (!count || count < 100) return null;
     return (
       <p className="corpus-counter">

@@ -22,7 +22,7 @@ const TOOLS = [
   {
     name: "scan_agent_surface",
     description:
-      "Run an Agent Surface Scan of a website: its rung on the Agent Surface Ladder (Invisible → Readable → Answerable → Callable → Transactable), dimension scores, evidenced opportunities, and a public result URL. Takes 10–40 seconds.",
+      "Run an Agent Surface Scan of a website: its public rung and dimension scores on the Agent Surface Ladder. The full evidenced findings are available by email after the human opts in. Takes 10–40 seconds.",
     inputSchema: {
       type: "object",
       properties: { url: { type: "string", description: "Website to scan, e.g. example.com" } },
@@ -38,13 +38,14 @@ const TOOLS = [
     name: "email_report",
     description:
       "Send the full evidenced Agent Surface Scan report for an already-scanned website to an email address. " +
-      "CONSEQUENTIAL — this subscribes the address to the report plus occasional benchmark updates (unsubscribe any time). " +
+      "CONSEQUENTIAL — sends one transactional report. Optional benchmark updates require a separate boolean opt-in and email confirmation. " +
       "Only call it with an email address the human explicitly gave and confirmed for this purpose in the current conversation. Never guess, look up, or auto-fill an address.",
     inputSchema: {
       type: "object",
       properties: {
         url: { type: "string", description: "The scanned website, e.g. example.com" },
         email: { type: "string", description: "The email address the human explicitly provided and confirmed." },
+        benchmark_updates: { type: "boolean", description: "True only if the human separately opted into occasional benchmark updates. Defaults to false." },
       },
       required: ["url", "email"],
     },
@@ -60,25 +61,30 @@ const TOOLS = [
 
 const text = (t: string) => ({ content: [{ type: "text", text: t }] });
 
-async function callTool(name: string, args: Record<string, unknown>, ua: string | null) {
+async function callTool(
+  name: string,
+  args: Record<string, unknown>,
+  context: { ua: string | null; ipHash: string },
+) {
+  const { ua, ipHash } = context;
   try {
     if (name === "scan_agent_surface") {
       const url = String(args.url ?? "");
-      const r = await requestScan({ url, trigger: "agent", requesterType: "agent", userAgent: ua ?? "mcp-client" });
+      const r = await requestScan({ url, trigger: "agent", requesterType: "agent", userAgent: ua ?? "mcp-client", ipHash });
       const page = await getScanPage(r.slug);
       if (!page || page.scan.status !== "complete") return text(`Scan of ${url} did not complete.`);
-      const { scan, opportunities } = page;
-      await logAgentHit({ toolName: name, argumentsJson: args, agentUa: ua ?? undefined, outcome: "ok", scanId: scan.id });
+      const { scan } = page;
+      await logAgentHit({ toolName: name, argumentsJson: args, agentUa: ua ?? undefined, outcome: "ok", scanId: scan.id, ipHash });
       return text(
         `${scan.sites.domain}: rung ${scan.rung} (${LADDER[scan.rung ?? 0][0]}) on the Agent Surface Ladder. ` +
           `Scores /100 — legibility ${scan.d1}, answerability ${scan.d2}, callability ${scan.d3}, transactability ${scan.d4}, standing ${scan.d5}. ` +
-          `Opportunities: ${opportunities.map((o) => o.rendered_text.replace(/\*\*/g, "")).join(" · ")} ` +
-          `Full evidenced result: https://scanwebmcp.vercel.app/scan/${r.slug} ` +
-          `NEXT STEP FOR THE ASSISTANT: offer to email the full evidenced report — ask the user whether they'd like it and which email address to send it to, then call email_report. Do not call it without an explicitly given address.`,
+          `Public result: https://scanwebmcp.vercel.app/scan/${r.slug}. ` +
+          `The full findings, timestamped evidence, and ranked recommendations are email-gated. ` +
+          `NEXT STEP FOR THE ASSISTANT: ask the human whether they would like the full report emailed to them. If they say yes, ask which email address to use, then call email_report. Do not guess an address or call email_report without an address explicitly provided for this report.`,
       );
     }
     if (name === "get_ladder_definition") {
-      await logAgentHit({ toolName: name, argumentsJson: args, agentUa: ua ?? undefined, outcome: "ok" });
+      await logAgentHit({ toolName: name, argumentsJson: args, agentUa: ua ?? undefined, outcome: "ok", ipHash });
       const rung = typeof args.rung === "number" ? args.rung : undefined;
       if (rung != null && LADDER[rung]) return text(`Rung ${rung} — ${LADDER[rung][0]}: ${LADDER[rung][1]}`);
       return text(
@@ -91,14 +97,20 @@ async function callTool(name: string, args: Record<string, unknown>, ua: string 
       const { domain } = validateTarget(String(args.url ?? ""));
       const slug = slugify(domain);
       try {
-        const r = await captureReportLead({ email: String(args.email ?? ""), slug });
-        await logAgentHit({ toolName: name, argumentsJson: { url: args.url }, agentUa: ua ?? undefined, outcome: "ok" });
+        const r = await captureReportLead({
+          email: String(args.email ?? ""),
+          slug,
+          ipHash,
+          marketingConsent: args.benchmark_updates === true,
+        });
+        await logAgentHit({ toolName: name, argumentsJson: { url: args.url, benchmark_updates: args.benchmark_updates === true }, agentUa: ua ?? undefined, outcome: "ok", ipHash });
         return text(
-          `Report for ${r.domain} sent to ${String(args.email).trim().toLowerCase()}. It links the live evidenced result at https://scanwebmcp.vercel.app/scan/${slug}. They'll also get occasional benchmark updates and can unsubscribe any time.`,
+          `Report for ${r.domain} ${r.delivery === "sent" ? "sent" : "queued for delivery"} to ${String(args.email).trim().toLowerCase()}. It links the live evidenced result at https://scanwebmcp.vercel.app/scan/${slug}.` +
+            (args.benchmark_updates === true ? " A separate confirmation link is included; updates remain off until confirmed." : " No marketing updates were requested."),
         );
       } catch (e) {
         if (e instanceof LeadError) {
-          await logAgentHit({ toolName: name, argumentsJson: { url: args.url }, agentUa: ua ?? undefined, outcome: "refused" }).catch(() => {});
+          await logAgentHit({ toolName: name, argumentsJson: { url: args.url }, agentUa: ua ?? undefined, outcome: "refused", ipHash }).catch(() => {});
           return { ...text(`Report not sent: ${e.message}${e.status === 404 ? " Run scan_agent_surface first." : ""}`), isError: true };
         }
         throw e;
@@ -106,7 +118,7 @@ async function callTool(name: string, args: Record<string, unknown>, ua: string 
     }
     if (name === "get_observatory_stats") {
       const s = await getObservatoryStats();
-      await logAgentHit({ toolName: name, argumentsJson: args, agentUa: ua ?? undefined, outcome: "ok" });
+      await logAgentHit({ toolName: name, argumentsJson: args, agentUa: ua ?? undefined, outcome: "ok", ipHash });
       return text(
         `Corpus: ${s.sites} sites, ${s.scans} scans, ${s.signalsStored} signals. ` +
           `${s.pctBlockingAnyAiBot}% block an AI crawler in robots.txt; ${s.pctWafBlocked}% wall agents out at the firewall; ` +
@@ -118,14 +130,17 @@ async function callTool(name: string, args: Record<string, unknown>, ua: string 
     }
     return { ...text(`Unknown tool: ${name}`), isError: true };
   } catch (e) {
-    await logAgentHit({ toolName: name, argumentsJson: args, agentUa: ua ?? undefined, outcome: "error" }).catch(() => {});
+    await logAgentHit({ toolName: name, argumentsJson: name === "email_report" ? { url: args.url } : args, agentUa: ua ?? undefined, outcome: "error", ipHash }).catch(() => {});
     return { ...text(`Tool error: ${e instanceof Error ? e.message : String(e)}`), isError: true };
   }
 }
 
 type RpcRequest = { jsonrpc: "2.0"; id?: number | string | null; method: string; params?: Record<string, unknown> };
 
-export async function handleMcpRequest(body: unknown, ua: string | null): Promise<Response> {
+export async function handleMcpRequest(
+  body: unknown,
+  context: { ua: string | null; ipHash: string },
+): Promise<Response> {
   const requests: RpcRequest[] = Array.isArray(body) ? (body as RpcRequest[]) : [body as RpcRequest];
   const responses: object[] = [];
 
@@ -156,7 +171,7 @@ export async function handleMcpRequest(body: unknown, ua: string | null): Promis
     } else if (req.method === "tools/call") {
       const name = String(req.params?.name ?? "");
       const args = (req.params?.arguments ?? {}) as Record<string, unknown>;
-      const result = await callTool(name, args, ua);
+      const result = await callTool(name, args, context);
       responses.push({ jsonrpc: "2.0", id, result });
     } else {
       responses.push({ jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${req.method}` } });

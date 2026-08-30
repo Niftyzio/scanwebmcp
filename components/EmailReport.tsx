@@ -6,6 +6,7 @@ import { useState } from "react";
  *  come-back alert, and starts the list with domain-tagged leads. */
 export default function EmailReport({ slug }: { slug: string }) {
   const [email, setEmail] = useState("");
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [error, setError] = useState("");
 
@@ -17,7 +18,7 @@ export default function EmailReport({ slug }: { slug: string }) {
       const res = await fetch("/api/report-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, slug }),
+        body: JSON.stringify({ email, slug, marketingConsent }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "Something went wrong — try again.");
@@ -31,8 +32,8 @@ export default function EmailReport({ slug }: { slug: string }) {
   if (state === "done") {
     return (
       <p className="email-report done">
-        Done — this report is on its way to your inbox, and we&apos;ll let you know when your
-        benchmark position moves.
+        Done — this report was sent or queued for delivery. If you requested benchmark updates,
+        they remain off until you confirm through the separate link in the email.
       </p>
     );
   }
@@ -40,8 +41,7 @@ export default function EmailReport({ slug }: { slug: string }) {
   return (
     <form onSubmit={submit} className="email-report" aria-busy={state === "sending"}>
       <p className="email-report-lede">
-        <strong>Keep this report.</strong> Get it in your inbox — plus an alert when your
-        benchmark position moves.
+        <strong>Keep this report.</strong> Get the evidenced result in your inbox.
       </p>
       <div className="email-report-row">
         <input
@@ -57,7 +57,15 @@ export default function EmailReport({ slug }: { slug: string }) {
           {state === "sending" ? "Sending…" : "Email me this report"}
         </button>
       </div>
-      <p className="muted small">Occasional benchmark updates included. Unsubscribe any time.</p>
+      <label className="consent-row small">
+        <input
+          type="checkbox"
+          checked={marketingConsent}
+          onChange={(event) => setMarketingConsent(event.target.checked)}
+          disabled={state === "sending"}
+        />
+        Email me occasional benchmark updates too (optional; confirmation required).
+      </label>
       {state === "error" && <p className="error">{error}</p>}
     </form>
   );

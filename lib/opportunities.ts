@@ -32,10 +32,15 @@ const TEMPLATES: Template[] = [
     key: "firewall_blocks_agents",
     impact: 5,
     ease: 4,
-    applies: (r) => sig(r, "agent_access_blocked")?.valueBool === true,
-    title: () => "Your security wall is turning away the agents your buyers send",
-    text: () =>
-      `When our scanner visited as an automated agent, your site served a bot-challenge page instead of content — and what happened to us happens to every AI assistant a potential client sends your way. The fix is usually one firewall rule: allow verified AI crawlers and agents (most WAFs, including Cloudflare, now have a one-toggle setting for this) while keeping protection for everything else.`,
+    applies: (r) =>
+      sig(r, "agent_access_blocked")?.valueBool === true ||
+      sig(r, "scanner_access_blocked")?.valueBool === true,
+    title: (r) => sig(r, "scanner_access_blocked")?.valueBool
+      ? "Your robots policy excludes this scanner"
+      : "Your security wall is turning away the agents your buyers send",
+    text: (r) => sig(r, "scanner_access_blocked")?.valueBool
+      ? `Your robots.txt explicitly denies AgentSurfaceScan, so we honoured that instruction and stopped. If that was intentional, no change is needed. If you want an evidenced report, add a specific AgentSurfaceScan group that permits the public paths you want measured; you do not need to open private or administrative areas.`
+      : `When our scanner visited as an automated agent, your site served a bot-challenge page instead of content — and what happened to us happens to every AI assistant a potential client sends your way. Review the firewall rule for verified automated visitors while keeping protection for everything else.`,
   },
   {
     key: "unblock_agents",

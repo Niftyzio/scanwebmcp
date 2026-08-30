@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  turbopack: { root: process.cwd() },
   // Playwright is the local renderer fallback (lib/render.ts) — never bundle
   // it; it's loaded dynamically and absent in serverless deploys.
   serverExternalPackages: ["playwright", "playwright-core"],

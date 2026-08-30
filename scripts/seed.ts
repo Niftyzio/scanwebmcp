@@ -50,10 +50,11 @@ async function main() {
               requesterType: "human",
               userAgent: "seed-runner/0.1",
             });
-            await db()
+            const { error } = await db()
               .from("sites")
               .update({ sector: row.sector, is_seed: true })
               .eq("domain", row.domain.replace(/^https?:\/\//, "").toLowerCase());
+            if (error) throw new Error(`site update failed: ${error.message}`);
             results.push({ ...row, ok: true, note: r.cached ? "cached" : "scanned" });
           } catch (e) {
             results.push({ ...row, ok: false, note: e instanceof Error ? e.message.slice(0, 80) : "error" });
@@ -73,11 +74,12 @@ async function main() {
   console.log(`\nDone: ${results.length - failed.length} ok, ${failed.length} failed.`);
   for (const f of failed) console.log(`  FAIL ${f.domain}: ${f.note}`);
 
-  const { data } = await db()
+  const { data, error: distributionError } = await db()
     .from("scans")
     .select("rung, sites!inner(sector)")
     .eq("trigger", "seed")
     .eq("status", "complete");
+  if (distributionError) throw new Error(`distribution read failed: ${distributionError.message}`);
   const dist: Record<string, Record<number, number>> = {};
   for (const s of (data ?? []) as unknown as { rung: number; sites: { sector: string } }[]) {
     const sec = s.sites?.sector ?? "?";

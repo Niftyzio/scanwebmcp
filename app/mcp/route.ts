@@ -1,8 +1,11 @@
 import { handleMcpRequest } from "@/lib/mcp-server";
+import { requesterHash } from "@/lib/request-identity";
 
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  if (Number(request.headers.get("content-length") ?? 0) > 65_536)
+    return Response.json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: "Request too large" } }, { status: 413 });
   let body: unknown;
   try {
     body = await request.json();
@@ -12,7 +15,12 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  return handleMcpRequest(body, request.headers.get("user-agent"));
+  if (Array.isArray(body) && body.length > 20)
+    return Response.json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: "Batch too large" } }, { status: 400 });
+  return handleMcpRequest(body, {
+    ua: request.headers.get("user-agent"),
+    ipHash: requesterHash(request),
+  });
 }
 
 // No server-initiated stream; clients use POST. (405 per Streamable HTTP spec.)

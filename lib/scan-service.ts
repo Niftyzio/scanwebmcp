@@ -22,7 +22,11 @@ export interface ScanRecord {
 }
 
 export const slugify = (domain: string) =>
-  domain.replace(/^www\./, "").replace(/[^a-z0-9.]+/gi, "-").toLowerCase();
+  domain.replace(/[^a-z0-9.]+/gi, "-").toLowerCase();
+
+function assertDb(error: { message: string } | null, operation: string): void {
+  if (error) throw new Error(`${operation}: ${error.message}`);
+}
 
 /**
  * One scan per domain per 24h unless explicitly re-scanned (spec §10 caching
@@ -59,26 +63,30 @@ export async function requestScan(opts: {
   const declaredSector = normaliseSector(opts.sector);
 
   if (opts.ipHash && opts.trigger !== "seed") {
-    const { count } = await supabase
-      .from("scans")
-      .select("*", { count: "exact", head: true })
-      .eq("requester_ip_hash", opts.ipHash)
-      .gte("created_at", new Date(Date.now() - 3600_000).toISOString());
-    if ((count ?? 0) >= IP_SCANS_PER_HOUR)
+    const { data: allowed, error } = await supabase.rpc("consume_rate_limit", {
+      requested_kind: "scan",
+      requested_hash: opts.ipHash,
+      maximum_events: IP_SCANS_PER_HOUR,
+      window_seconds: 3600,
+    });
+    assertDb(error, "Could not check the scan rate limit");
+    if (!allowed)
       throw new Error(
         "Rate limit: that's a lot of scans in one hour from this connection. Results stay live at their links — come back in a bit for more.",
       );
   }
 
-  const { data: site } = await supabase
+  const { data: site, error: siteReadError } = await supabase
     .from("sites")
     .select("id, opt_out, last_scanned_at, sector, country")
     .eq("domain", domain)
     .maybeSingle();
+  assertDb(siteReadError, "Could not read the site record");
 
   if (site?.opt_out) throw new Error("This domain has opted out of scanning.");
   if (site && !site.sector && declaredSector) {
-    await supabase.from("sites").update({ sector: declaredSector }).eq("id", site.id);
+    const { error } = await supabase.from("sites").update({ sector: declaredSector }).eq("id", site.id);
+    assertDb(error, "Could not update the site sector");
   }
 
   const slug = slugify(domain);
@@ -86,7 +94,7 @@ export async function requestScan(opts: {
     // Fresh-enough result → serve it. Re-scans shorten the window rather than
     // bypassing it, so the button can't be used to hammer a site.
     const windowMs = opts.trigger === "rescan" ? RESCAN_COOLDOWN_MS : CACHE_WINDOW_MS;
-    const { data: recent } = await supabase
+    const { data: recent, error } = await supabase
       .from("scans")
       .select("slug, status, completed_at")
       .eq("site_id", site.id)
@@ -95,6 +103,7 @@ export async function requestScan(opts: {
       .order("completed_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    assertDb(error, "Could not read the scan cache");
     if (recent) return { slug: recent.slug, status: "complete", cached: true };
   }
 
@@ -135,11 +144,12 @@ export async function requestScan(opts: {
     // Production scoring comes from the private rubric store; the code's
     // reference values are the fallback for standalone use.
     let scoring: ScoringConfig = REFERENCE_SCORING;
-    const { data: rubric } = await supabase
+    const { data: rubric, error: rubricError } = await supabase
       .from("rubric_versions")
       .select("weights_json")
       .eq("version", RUBRIC_VERSION)
       .maybeSingle();
+    assertDb(rubricError, "Could not load the scoring rubric");
     const wj = rubric?.weights_json as { weights?: ScoringConfig["weights"]; gates?: ScoringConfig["gates"] } | null;
     if (wj?.weights && wj?.gates) scoring = { weights: wj.weights, gates: wj.gates };
 
@@ -161,7 +171,7 @@ export async function requestScan(opts: {
     );
     if (sigErr) throw new Error(`Signal storage failed: ${sigErr.message}`);
 
-    await supabase.from("opportunities").insert(
+    const { error: opportunityError } = await supabase.from("opportunities").insert(
       opportunities.map((o) => ({
         scan_id: scan.id,
         rank: o.rank,
@@ -171,8 +181,9 @@ export async function requestScan(opts: {
         ease: o.ease,
       })),
     );
+    assertDb(opportunityError, "Opportunity storage failed");
 
-    await supabase
+    const { error: completeError } = await supabase
       .from("scans")
       .update({
         status: "complete",
@@ -187,8 +198,9 @@ export async function requestScan(opts: {
         error: result.errors.join("; ") || null,
       })
       .eq("id", scan.id);
+    assertDb(completeError, "Could not complete the scan record");
 
-    await supabase
+    const { error: siteUpdateError } = await supabase
       .from("sites")
       .update({
         last_scanned_at: new Date().toISOString(),
@@ -197,6 +209,7 @@ export async function requestScan(opts: {
         ...(!site?.country && result.countryGuess ? { country: result.countryGuess } : {}),
       })
       .eq("id", siteId);
+    assertDb(siteUpdateError, "Could not update the site record");
 
     // Render backfill: a scan whose WebMCP check degraded (renderer saturated
     // or down) queues itself for one automatic re-scan on the cron drumbeat.
@@ -208,22 +221,25 @@ export async function requestScan(opts: {
         (s.valueText ?? "").startsWith("render_unavailable"),
     );
     if (renderDegraded) {
-      const { data: queued } = await supabase
+      const { data: queued, error: queueReadError } = await supabase
         .from("scan_queue")
         .select("id")
         .eq("domain", domain)
         .eq("status", "pending")
         .limit(1)
         .maybeSingle();
-      if (!queued)
-        await supabase
+      assertDb(queueReadError, "Could not read the render backfill queue");
+      if (!queued) {
+        const { error: queueInsertError } = await supabase
           .from("scan_queue")
           .insert({ domain, status: "pending", error: "render_backfill" });
+        assertDb(queueInsertError, "Could not queue the render backfill");
+      }
     }
 
     return { slug, status: "complete", cached: false };
   } catch (e) {
-    await supabase
+    const { error: failureWriteError } = await supabase
       .from("scans")
       .update({
         status: "failed",
@@ -231,6 +247,7 @@ export async function requestScan(opts: {
         error: e instanceof Error ? e.message : String(e),
       })
       .eq("id", scan.id);
+    if (failureWriteError) console.error(`Could not mark failed scan ${scan.id}: ${failureWriteError.message}`);
     throw e;
   }
 }
@@ -238,20 +255,23 @@ export async function requestScan(opts: {
 /** Latest scan (any status) for a result slug, with signals + opportunities. */
 export async function getScanPage(slug: string) {
   const supabase = db();
-  const { data: scan } = await supabase
+  const { data: scan, error: scanError } = await supabase
     .from("scans")
     .select("*, sites!inner(domain, sector)")
     .eq("slug", slug)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  assertDb(scanError, "Could not read the scan page");
   if (!scan) return null;
 
-  const [{ data: signals }, { data: opportunities }] = await Promise.all([
+  const [signalResult, opportunityResult] = await Promise.all([
     supabase.from("signals").select("*").eq("scan_id", scan.id).order("id"),
     supabase.from("opportunities").select("*").eq("scan_id", scan.id).order("rank"),
   ]);
-  return { scan, signals: signals ?? [], opportunities: opportunities ?? [] };
+  assertDb(signalResult.error, "Could not read scan signals");
+  assertDb(opportunityResult.error, "Could not read scan opportunities");
+  return { scan, signals: signalResult.data ?? [], opportunities: opportunityResult.data ?? [] };
 }
 
 export async function logAgentHit(opts: {
@@ -260,8 +280,20 @@ export async function logAgentHit(opts: {
   agentUa?: string;
   outcome: string;
   scanId?: number;
+  ipHash?: string;
 }) {
-  await db()
+  const supabase = db();
+  if (opts.ipHash) {
+    const { data: allowed, error: countError } = await supabase.rpc("consume_rate_limit", {
+      requested_kind: "agent_hit",
+      requested_hash: opts.ipHash,
+      maximum_events: 120,
+      window_seconds: 3600,
+    });
+    assertDb(countError, "Could not check the instrumentation rate limit");
+    if (!allowed) throw new Error("Rate limit: too many instrumentation events.");
+  }
+  const { error } = await supabase
     .from("agent_hits")
     .insert({
       scan_id: opts.scanId ?? null,
@@ -269,5 +301,7 @@ export async function logAgentHit(opts: {
       arguments_json: opts.argumentsJson ?? null,
       agent_ua: opts.agentUa?.slice(0, 300) ?? null,
       outcome: opts.outcome,
+      requester_ip_hash: opts.ipHash ?? null,
     });
+  assertDb(error, "Could not log the agent invocation");
 }

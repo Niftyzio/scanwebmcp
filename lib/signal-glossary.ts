@@ -56,6 +56,14 @@ export const SIGNALS: Record<string, SignalMeta> = {
     plain:
       "When our scanner arrived as an automated visitor, the site's security system served a challenge page instead of content. Every AI assistant a buyer sends gets the same treatment.",
   },
+  scanner_access_blocked: {
+    label: "robots.txt denied this scan",
+    plain: "The site's published crawler rules explicitly denied AgentSurfaceScan, so we stopped instead of reading disallowed pages.",
+  },
+  robots_scanner: {
+    label: "Access for this scanner",
+    plain: "Whether robots.txt allows AgentSurfaceScan to fetch the page being measured.",
+  },
   robots_gptbot: {
     label: "OpenAI's crawler (GPTBot)",
     plain: "What your robots.txt file tells the crawler behind ChatGPT.",
@@ -156,12 +164,16 @@ export const SIGNALS: Record<string, SignalMeta> = {
     plain: "A second standard location agents check for callable capabilities.",
   },
   webmcp_registration: {
-    label: "WebMCP tools declared",
-    plain: "Whether the site's pages declare tools an in-browser agent could use.",
+    label: "WebMCP runtime check",
+    plain: "Whether a rendered browser witnessed tools being registered. A manifest or source-code pattern is recorded separately but is not treated as working.",
   },
   webmcp_tools_found: {
     label: "WebMCP tools working",
-    plain: "How many declared tools actually responded when probed.",
+    plain: "How many live tool registrations the browser protocol observed.",
+  },
+  webmcp_tools_declared: {
+    label: "WebMCP tools declared (unverified)",
+    plain: "Names advertised by a page manifest. This helps discovery but does not prove that an agent can call them.",
   },
 
   // D4
@@ -203,6 +215,10 @@ export function describeSignalValue(
       return text === "http_429"
         ? "rate-limited — the site asked our agent to go away and come back never"
         : "a challenge page was served instead of content";
+    case "scanner_access_blocked":
+      return "robots.txt explicitly denied this scanner";
+    case "robots_scanner":
+      return bool ? "this scanner is allowed" : "this scanner is blocked";
     case "robots_gptbot":
     case "robots_claudebot":
     case "robots_google_extended":
@@ -258,7 +274,9 @@ export function describeSignalValue(
         default: return "no machine-readable identity found";
       }
     case "webmcp_tools_found":
-      return `${num ?? 0} working tool${num === 1 ? "" : "s"}`;
+      return `${num ?? 0} live registration${num === 1 ? "" : "s"} observed`;
+    case "webmcp_tools_declared":
+      return `${num ?? 0} tool name${num === 1 ? "" : "s"} declared, not verified callable`;
     case "webmcp_registration":
       if (text?.startsWith("render_unavailable"))
         return "couldn't be checked this time — the renderer was unavailable, so this is unmeasured, not counted against you";
@@ -266,8 +284,8 @@ export function describeSignalValue(
         return "not checked — the site's wall stopped the scan before this step";
       switch (text) {
         case "active_tools_found": return "live tools found — agents can use this site";
-        case "manifest_found": return "a tool manifest is declared";
-        case "registration_code_found": return "tool-registration code is present";
+        case "manifest_declared_unverified": return "a manifest is declared, but no live registrations were observed";
+        case "registration_code_unverified": return "registration-looking source code is present, but no live registrations were observed";
         default: return "none found";
       }
   }

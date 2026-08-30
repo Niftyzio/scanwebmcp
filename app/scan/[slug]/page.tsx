@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { getScanPage } from "@/lib/scan-service";
 import WebMCPTools from "@/components/WebMCPTools";
 import RescanButton from "@/components/RescanButton";
@@ -10,6 +11,7 @@ import { buildAgentView } from "@/lib/agent-view";
 import { getBenchmark, type DimKey } from "@/lib/benchmark";
 import { DIMENSIONS, signalLabel, signalPlain, describeSignalValue } from "@/lib/signal-glossary";
 import { sectorNoun } from "@/lib/sectors";
+import { hasReportAccess, REPORT_ACCESS_COOKIE } from "@/lib/report-access";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +62,10 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
     );
   }
 
+  const gateEnabled = process.env.REPORT_GATE !== "off";
+  const cookieStore = await cookies();
+  const unlocked =
+    !gateEnabled || hasReportAccess(cookieStore.get(REPORT_ACCESS_COOKIE)?.value, scan.slug);
   const rung: number = scan.rung ?? 0;
   const scanData = {
     scanId: scan.id,
@@ -67,22 +73,27 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
     slug: scan.slug,
     rung,
     rungName: RUNGS[rung],
+    unlocked,
     scores: { d1: scan.d1, d2: scan.d2, d3: scan.d3, d4: scan.d4, d5: scan.d5, composite: scan.composite },
-    opportunities: opportunities.map((o) => ({
-      rank: o.rank,
-      text: o.rendered_text,
-      impact: o.impact,
-      ease: o.ease,
-    })),
-    signals: signals.map((s) => ({
-      dimension: s.dimension,
-      key: s.signal_key,
-      value: s.value_bool ?? s.value_num ?? s.value_text,
-      detail: s.value_text,
-      evidenceUrl: s.evidence_url,
-      evidenceSnippet: s.evidence_snippet,
-      observedAt: s.observed_at,
-    })),
+    opportunities: unlocked
+      ? opportunities.map((o) => ({
+          rank: o.rank,
+          text: o.rendered_text,
+          impact: o.impact,
+          ease: o.ease,
+        }))
+      : [],
+    signals: unlocked
+      ? signals.map((s) => ({
+          dimension: s.dimension,
+          key: s.signal_key,
+          value: s.value_bool ?? s.value_num ?? s.value_text,
+          detail: s.value_text,
+          evidenceUrl: s.evidence_url,
+          evidenceSnippet: s.evidence_snippet,
+          observedAt: s.observed_at,
+        }))
+      : [],
   };
 
   const scannedAt = new Date(scan.completed_at).toUTCString();
@@ -127,15 +138,6 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         <a href="/ladder" className="small">How the Ladder is measured →</a>
       </p>
 
-      {signals.some((s) => s.signal_key === "agent_access_blocked" && s.value_bool) && (
-        <div className="degraded-note">
-          <strong>Partial scan.</strong> This site&apos;s security system served our agent a
-          bot-challenge page instead of content. We report only what was genuinely observed — the
-          block itself, robots.txt directives, and fixed-path probes. Dimensions we could not reach
-          are unmeasured, not zero. For an AI agent, of course, the wall <em>is</em> the experience.
-        </div>
-      )}
-
       <Benchmark
         siteId={scan.site_id}
         sector={scan.sites.sector ?? null}
@@ -143,8 +145,18 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         dims={{ d1: scan.d1, d2: scan.d2, d3: scan.d3, d4: scan.d4, d5: scan.d5 }}
       />
 
-      <ReportGate slug={scan.slug} enabled={process.env.REPORT_GATE !== "off"}>
-      {process.env.REPORT_GATE === "off" && <EmailReport slug={scan.slug} />}
+      {unlocked ? (
+      <>
+      {!gateEnabled && <EmailReport slug={scan.slug} />}
+
+      {signals.some((s) => ["agent_access_blocked", "scanner_access_blocked"].includes(s.signal_key) && s.value_bool) && (
+        <div className="degraded-note">
+          <strong>Partial scan.</strong> This site&apos;s security system served our agent a
+          bot-challenge page instead of content. We report only what was genuinely observed — the
+          block itself, robots.txt directives, and fixed-path probes. Dimensions we could not reach
+          are unmeasured, not zero. For an AI agent, of course, the wall <em>is</em> the experience.
+        </div>
+      )}
 
       <AgentEyes domain={domain} signals={signals} />
 
@@ -225,7 +237,10 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
           <RescanButton domain={domain} />
         </p>
       </section>
-      </ReportGate>
+      </>
+      ) : (
+        <ReportGate slug={scan.slug} />
+      )}
     </main>
   );
 }
@@ -244,7 +259,7 @@ async function Benchmark({
   dims: Partial<Record<DimKey, number | null>>;
 }) {
   const b = await getBenchmark(siteId, sector, composite, dims);
-  const noun = b.dimPool === "sector" ? sectorNoun(sector) : "businesses analysed so far";
+  const noun = b.dimPool === "sector" ? sectorNoun(sector) : "businesses";
 
   const strip =
     b.sectorPercentile != null ? (
@@ -316,7 +331,7 @@ async function Benchmark({
               <div className="pillar-bar" aria-hidden="true">
                 <div className="pillar-fill" style={{ width: `${score}%` }} />
                 {median != null && median > 0 && (
-                  <div className="pillar-median" style={{ left: `${median}%` }} title={`The typical ${noun.replace(/s$/, "")} analysed scores ${median}`} />
+                  <div className="pillar-median" style={{ left: `${median}%` }} title={`The typical member of this comparison set scores ${median}`} />
                 )}
               </div>
               <p className="muted small">
