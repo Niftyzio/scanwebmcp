@@ -3,6 +3,7 @@ import {
   classifyWebMCPProbe,
   interpretRuntimeToolSnapshot,
   remoteBrowserProtocol,
+  withWebMCPLaunchOptions,
   type WebMCPProbe,
 } from "./render";
 
@@ -69,6 +70,34 @@ describe("remote browser transport", () => {
   it("uses the native protocol only for Playwright endpoints", () => {
     expect(remoteBrowserProtocol("wss://production-lon.browserless.io/chromium/playwright?token=secret")).toBe("playwright");
     expect(remoteBrowserProtocol("wss://production-lon.browserless.io/playwright/?token=secret")).toBe("playwright");
+  });
+
+  it("adds the Browserless-compatible WebMCP feature switch", () => {
+    const endpoint = new URL(withWebMCPLaunchOptions(
+      "wss://production-lon.browserless.io/chromium/playwright?token=secret",
+    ));
+    expect(JSON.parse(endpoint.searchParams.get("launch") ?? "{}")).toEqual({
+      args: ["--enable-features=WebMCP"],
+    });
+    expect(endpoint.searchParams.get("token")).toBe("secret");
+  });
+
+  it("merges an existing launch payload and removes the unsupported WebMCP blink switch", () => {
+    const launch = encodeURIComponent(JSON.stringify({
+      headless: true,
+      args: ["--lang=en-GB", "--enable-features=Existing", "--enable-blink-features=WebMCP,Other"],
+    }));
+    const endpoint = new URL(withWebMCPLaunchOptions(
+      `wss://production-lon.browserless.io/chromium/playwright?token=secret&launch=${launch}`,
+    ));
+    expect(JSON.parse(endpoint.searchParams.get("launch") ?? "{}")).toEqual({
+      headless: true,
+      args: [
+        "--lang=en-GB",
+        "--enable-blink-features=Other",
+        "--enable-features=Existing,WebMCP",
+      ],
+    });
   });
 });
 
