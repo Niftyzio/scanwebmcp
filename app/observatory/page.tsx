@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getObservatoryStats } from "@/lib/benchmark";
 import WebMCPTools from "@/components/WebMCPTools";
+import LiveCorpusCounter from "@/components/LiveCorpusCounter";
 
 export const metadata: Metadata = {
   title: "The Agent Surface Observatory",
@@ -25,6 +26,8 @@ export default async function Observatory() {
         What AI agents actually find when they visit the business web — measured, not estimated.
         Every number below comes from real scans with stored evidence.
       </p>
+
+      <LiveCorpusCounter initialSites={s.sites} initialScans={s.scans} variant="observatory" />
 
       <div className="stat-grid">
         <div className="stat"><span className="stat-num">{s.pctBlockingAnyAiBot}%</span> block at least one major AI crawler in robots.txt</div>
@@ -71,10 +74,9 @@ export default async function Observatory() {
         </tbody>
       </table>
       <p className="muted small">
-        The lone Callable entry above is this site itself — scanned by the same rules as everyone
-        else, and it started the night at rung 0.{" "}
-        <a href="/case-study">Read the case study →</a> Sector percentiles appear on result
-        pages once a sector reaches 30 scanned sites. Corpus:
+        Each business appears once in the ladder using its latest completed scan; re-scans update
+        its position without duplicating the website. <a href="/case-study">Read the case study →</a>{" "}
+        Sector percentiles appear on result pages once a sector reaches 30 scanned sites. Corpus:
         {" "}{s.sites} sites · {s.scans} scans · {s.signalsStored.toLocaleString()} stored signals ·{" "}
         {s.agentHits} tool calls made by AI agents against this site&apos;s own WebMCP surface.
       </p>

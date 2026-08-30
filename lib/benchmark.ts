@@ -145,18 +145,43 @@ export interface ObservatoryStats {
   agentHits: number;
 }
 
+export interface CorpusCounts {
+  /** Unique, non-opted-out sites with at least one successfully completed scan. */
+  sites: number;
+  /** Successfully completed scan runs, including re-scans of an existing site. */
+  scans: number;
+}
+
+export async function getCorpusCounts(): Promise<CorpusCounts> {
+  const supabase = db();
+  const [sitesResult, scansResult] = await Promise.all([
+    supabase
+      .from("sites")
+      .select("*", { count: "exact", head: true })
+      .eq("opt_out", false)
+      .not("last_scanned_at", "is", null),
+    supabase
+      .from("scans")
+      .select("*, sites!inner(opt_out)", { count: "exact", head: true })
+      .eq("status", "complete")
+      .eq("sites.opt_out", false),
+  ]);
+  if (sitesResult.error) throw new Error(`Could not count completed sites: ${sitesResult.error.message}`);
+  if (scansResult.error) throw new Error(`Could not count completed scans: ${scansResult.error.message}`);
+  return { sites: sitesResult.count ?? 0, scans: scansResult.count ?? 0 };
+}
+
 export async function getObservatoryStats(): Promise<ObservatoryStats> {
   const supabase = db();
-  const countResults = await Promise.all([
-      supabase.from("sites").select("*", { count: "exact", head: true }),
-      supabase.from("scans").select("*", { count: "exact", head: true }),
-      supabase.from("signals").select("*", { count: "exact", head: true }),
-      supabase.from("agent_hits").select("*", { count: "exact", head: true }),
-    ]);
+  const [corpusCounts, ...countResults] = await Promise.all([
+    getCorpusCounts(),
+    supabase.from("signals").select("*", { count: "exact", head: true }),
+    supabase.from("agent_hits").select("*", { count: "exact", head: true }),
+  ]);
   for (const result of countResults) {
     if (result.error) throw new Error(`Could not load observatory totals: ${result.error.message}`);
   }
-  const [{ count: sites }, { count: scans }, { count: signalsStored }, { count: agentHits }] = countResults;
+  const [{ count: signalsStored }, { count: agentHits }] = countResults;
 
   const { data: scanRows, error: scanRowsError } = await supabase
     .from("scans")
@@ -214,8 +239,8 @@ export async function getObservatoryStats(): Promise<ObservatoryStats> {
   const pc = (x: number) => Math.round((x / n) * 100);
 
   return {
-    sites: sites ?? 0,
-    scans: scans ?? 0,
+    sites: corpusCounts.sites,
+    scans: corpusCounts.scans,
     signalsStored: signalsStored ?? 0,
     rungDist,
     bySector: [...sectorMap.entries()]

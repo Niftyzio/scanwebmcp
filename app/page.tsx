@@ -3,7 +3,8 @@ import ScanForm from "@/components/ScanForm";
 import RecentScans from "@/components/RecentScans";
 import AgentRotator from "@/components/AgentRotator";
 import AgentAccessConstellation from "@/components/AgentAccessConstellation";
-import { getObservatoryStats, type ObservatoryStats } from "@/lib/benchmark";
+import LiveCorpusCounter from "@/components/LiveCorpusCounter";
+import { getCorpusCounts, getObservatoryStats, type ObservatoryStats } from "@/lib/benchmark";
 import Image from "next/image";
 
 export const revalidate = 300;
@@ -12,6 +13,7 @@ const RUNGS = ["Invisible", "Readable", "Answerable", "Callable", "Transactable"
 
 export default async function Home() {
   const stats = await getObservatoryStats().catch(() => null);
+  const counts = stats ?? await getCorpusCounts().catch(() => null);
 
   return (
     <main className="home-shell">
@@ -48,12 +50,13 @@ export default async function Home() {
         <div>
           <p className="section-label">A simple answer, not a technical audit</p>
           <h2 id="how-it-works">Know where you stand—and what to do next.</h2>
-          {stats && stats.sites >= 100 && (
-            <p className="corpus-counter">
-              <span className="corpus-count">{stats.sites.toLocaleString("en-GB")}</span> websites checked so far
-              <span aria-hidden="true"> · </span><a href="/observatory">See the live benchmark</a>
-            </p>
-          )}
+          {counts ? (
+            <LiveCorpusCounter
+              initialSites={counts.sites}
+              initialScans={counts.scans}
+              variant="home"
+            />
+          ) : null}
         </div>
         <ol className="home-steps">
           <li><span>01</span><strong>We look</strong><p>We check the public pages an AI agent can reach.</p></li>
