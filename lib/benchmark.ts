@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { sectorLabel } from "./sectors";
 
 /**
  * Benchmark context from the corpus. Spec §8 rules: a sector percentile is
@@ -135,7 +136,7 @@ export interface ObservatoryStats {
   scans: number;
   signalsStored: number;
   rungDist: Record<number, number>;
-  bySector: { sector: string; n: number; rungs: Record<number, number> }[];
+  bySector: SectorBreakdown[];
   pctBlockingAnyAiBot: number;
   pctWafBlocked: number;
   pctLlmsTxt: number;
@@ -150,6 +151,75 @@ export interface CorpusCounts {
   sites: number;
   /** Successfully completed scan runs, including re-scans of an existing site. */
   scans: number;
+}
+
+export interface SectorBreakdown {
+  /** Null is intentionally displayed as Unclassified rather than omitted. */
+  sector: string | null;
+  label: string;
+  n: number;
+  rungs: Record<number, number>;
+}
+
+export interface ObservatorySnapshot extends CorpusCounts {
+  bySector: SectorBreakdown[];
+}
+
+interface ObservatoryScanRow {
+  id: number;
+  site_id: number;
+  rung: number | null;
+  created_at: string;
+  sites: { sector: string | null; opt_out: boolean; domain: string };
+}
+
+export function summariseLatestCompletedScans(scanRows: ObservatoryScanRow[]) {
+  const latest = new Map<number, { id: number; rung: number | null; sector: string | null }>();
+  for (const row of scanRows) {
+    if (row.sites?.opt_out) continue;
+    if (!latest.has(row.site_id)) {
+      latest.set(row.site_id, {
+        id: row.id,
+        rung: row.rung,
+        sector: row.sites?.sector ?? null,
+      });
+    }
+  }
+
+  const rungDist: Record<number, number> = {};
+  const sectorMap = new Map<string | null, { n: number; rungs: Record<number, number> }>();
+  for (const row of latest.values()) {
+    if (row.rung != null) rungDist[row.rung] = (rungDist[row.rung] ?? 0) + 1;
+
+    const aggregate = sectorMap.get(row.sector) ?? { n: 0, rungs: {} };
+    aggregate.n += 1;
+    if (row.rung != null) aggregate.rungs[row.rung] = (aggregate.rungs[row.rung] ?? 0) + 1;
+    sectorMap.set(row.sector, aggregate);
+  }
+
+  const bySector: SectorBreakdown[] = [...sectorMap.entries()]
+    .map(([sector, aggregate]) => ({ sector, label: sectorLabel(sector), ...aggregate }))
+    .sort((a, b) => {
+      if (a.sector == null) return 1;
+      if (b.sector == null) return -1;
+      return b.n - a.n || a.label.localeCompare(b.label);
+    });
+
+  return {
+    scanIds: [...latest.values()].map((row) => row.id),
+    rungDist,
+    bySector,
+  };
+}
+
+async function loadLatestCompletedScanSummary() {
+  const { data, error } = await db()
+    .from("scans")
+    .select("id, site_id, rung, created_at, sites!inner(sector, opt_out, domain)")
+    .eq("status", "complete")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`Could not load observatory scans: ${error.message}`);
+  return summariseLatestCompletedScans((data ?? []) as unknown as ObservatoryScanRow[]);
 }
 
 export async function getCorpusCounts(): Promise<CorpusCounts> {
@@ -171,10 +241,19 @@ export async function getCorpusCounts(): Promise<CorpusCounts> {
   return { sites: sitesResult.count ?? 0, scans: scansResult.count ?? 0 };
 }
 
+export async function getObservatorySnapshot(): Promise<ObservatorySnapshot> {
+  const [counts, summary] = await Promise.all([
+    getCorpusCounts(),
+    loadLatestCompletedScanSummary(),
+  ]);
+  return { ...counts, bySector: summary.bySector };
+}
+
 export async function getObservatoryStats(): Promise<ObservatoryStats> {
   const supabase = db();
-  const [corpusCounts, ...countResults] = await Promise.all([
+  const [corpusCounts, scanSummary, ...countResults] = await Promise.all([
     getCorpusCounts(),
+    loadLatestCompletedScanSummary(),
     supabase.from("signals").select("*", { count: "exact", head: true }),
     supabase.from("agent_hits").select("*", { count: "exact", head: true }),
   ]);
@@ -183,30 +262,7 @@ export async function getObservatoryStats(): Promise<ObservatoryStats> {
   }
   const [{ count: signalsStored }, { count: agentHits }] = countResults;
 
-  const { data: scanRows, error: scanRowsError } = await supabase
-    .from("scans")
-    .select("id, site_id, rung, created_at, sites!inner(sector, opt_out, domain)")
-    .eq("status", "complete")
-    .order("created_at", { ascending: false });
-  if (scanRowsError) throw new Error(`Could not load observatory scans: ${scanRowsError.message}`);
-
-  const latest = new Map<number, { id: number; rung: number | null; sector: string | null }>();
-  for (const r of (scanRows ?? []) as unknown as { id: number; site_id: number; rung: number | null; sites: { sector: string | null; opt_out: boolean; domain: string } }[]) {
-    if (r.sites?.opt_out) continue;
-    if (!latest.has(r.site_id)) latest.set(r.site_id, { id: r.id, rung: r.rung, sector: r.sites?.sector ?? null });
-  }
-  const scanIds = [...latest.values()].map((r) => r.id);
-
-  const rungDist: Record<number, number> = {};
-  const sectorMap = new Map<string, Record<number, number>>();
-  for (const r of latest.values()) {
-    if (r.rung != null) rungDist[r.rung] = (rungDist[r.rung] ?? 0) + 1;
-    if (r.sector && r.rung != null) {
-      const s = sectorMap.get(r.sector) ?? {};
-      s[r.rung] = (s[r.rung] ?? 0) + 1;
-      sectorMap.set(r.sector, s);
-    }
-  }
+  const { scanIds, rungDist, bySector } = scanSummary;
 
   const { data: sigRows, error: sigRowsError } = await supabase
     .from("signals")
@@ -243,9 +299,7 @@ export async function getObservatoryStats(): Promise<ObservatoryStats> {
     scans: corpusCounts.scans,
     signalsStored: signalsStored ?? 0,
     rungDist,
-    bySector: [...sectorMap.entries()]
-      .map(([sector, rungs]) => ({ sector, n: Object.values(rungs).reduce((a, b) => a + b, 0), rungs }))
-      .sort((a, b) => b.n - a.n),
+    bySector,
     pctBlockingAnyAiBot: pc(blockingAny),
     pctWafBlocked: pc(waf),
     pctLlmsTxt: pc(llms),

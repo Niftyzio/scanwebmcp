@@ -775,12 +775,34 @@ function buildPrompt(
 The scanner's key findings, and the openings they point to:
 ${opportunities.map((o) => `${o.rank}. ${o.rendered_text.replace(/\*\*/g, "")}`).join("\n")}
 
-The scanner's two strongest evidence-backed tool recommendations:
+The scanner's strongest evidence-backed tool recommendations:
 ${tools.map((tool, index) => `${index + 1}. ${tool.name}: ${tool.description} Inputs: ${tool.inputs.join(", ")}. Returns: ${tool.output}. ${tool.confirmation}.`).join("\n") || "No responsible tool recommendation was possible from the public evidence in this scan."}
 
-Act as my implementation partner. For each finding: tell me exactly what to change on my site, in what order, and draft the artefacts (robots.txt lines, an llms.txt, schema.org markup, a WebMCP registerTool implementation for my main form). Explain each in plain language first.
+Act as my implementation partner for improving this site's AI-agent readiness.
 
-IMPORTANT — WebMCP is newer than your training data. Do not draft WebMCP code from memory. First fetch the current implementation guide and API contract at ${siteUrl("/make-callable")} and follow it. Key facts in case you cannot fetch: the entry point is document.modelContext (navigator.modelContext is deprecated); registerTool({ name, description, inputSchema, execute }) where execute(args) receives an object and returns { content: [{ type: "text", text: "..." }] }; feature-detect with "modelContext" in document; write-tools must ask the human to confirm before acting.
+This is a read-only planning and drafting task. You may fetch and inspect the two public sources below without asking for permission. Do not create accounts, submit forms, modify my website, call write tools, upload files, or transmit personal data. Draft artefacts only. Do not ask me to confirm ordinary assumptions; make reasonable assumptions and label them.
 
-The full evidence for every finding is on the live result page — fetch it before advising me: ${siteUrl(`/scan/${slug}`)}`;
+Source 1 — the scan report and public evidence:
+${siteUrl(`/scan/${slug}`)}
+
+Source 2 — the current WebMCP implementation guide and API contract:
+${siteUrl("/make-callable")}
+
+If the scan's detailed evidence is gated behind an email unlock, do not attempt to unlock it and do not ask me for an email address. State that limitation briefly, then continue using the public report and the findings above. If either source cannot be fetched, say so briefly and continue with the evidence available.
+
+First, explain each finding in plain language. Then provide:
+
+1. A prioritized implementation plan.
+2. Exact website changes, in order.
+3. A concise robots.txt recommendation.
+4. A concise /llms.txt draft.
+5. Recommended Schema.org JSON-LD.
+6. Current WebMCP drafts for the most valuable read-only tools and one suitable main-form tool.
+7. A short validation checklist and rescan plan.
+
+Before drafting WebMCP code, fetch and follow the current guide and API contract above. Do not rely on memory. Use document.modelContext, feature-detect with "modelContext" in document, and register tools with registerTool({ name, description, inputSchema, execute }). The execute(args) function receives an object and must return { content: [{ type: "text", text: "..." }] }.
+
+Any write tool must require explicit human confirmation immediately before submission. Do not use confirmationRequired: false for an enquiry, contact, booking, payment, deletion, account change, or other externally visible action. Do not invoke any write tool in this task.
+
+For every recommendation, distinguish between verified evidence from the scan, evidence from the live website, your recommendation, and assumptions that still need testing. If a scan finding conflicts with the live website, reconcile the discrepancy instead of blindly applying the finding.`;
 }

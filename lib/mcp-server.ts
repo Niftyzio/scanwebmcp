@@ -125,7 +125,7 @@ async function callTool(
           `${s.pctBlockingAnyAiBot}% block an AI crawler in robots.txt; ${s.pctWafBlocked}% wall agents out at the firewall; ` +
           `${s.pctLlmsTxt}% publish llms.txt; ${s.pctSellsMarkup}% have machine-readable offering markup; ` +
           `${s.pctAnyCallable}% expose anything callable; ${s.totalLatentForms} latent forms found. ` +
-          `Rung distribution: ${JSON.stringify(s.rungDist)}. By sector: ${s.bySector.map((r) => `${r.sector} n=${r.n}`).join(", ")}. ` +
+          `Rung distribution: ${JSON.stringify(s.rungDist)}. By sector: ${s.bySector.map((r) => `${r.label} n=${r.n}`).join(", ")}. ` +
           `Live view: ${siteUrl("/observatory")}`,
       );
     }
