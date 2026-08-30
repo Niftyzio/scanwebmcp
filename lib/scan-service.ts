@@ -24,13 +24,25 @@ export interface ScanRecord {
 export const slugify = (domain: string) =>
   domain.replace(/[^a-z0-9.]+/gi, "-").toLowerCase();
 
+export type ScanTrigger = "user" | "rescan" | "agent" | "seed";
+
+export interface ScanRequestResult {
+  slug: string;
+  status: string;
+  cached: boolean;
+  cachedAt?: string;
+  freshScanAvailableAt?: string;
+}
+
 function assertDb(error: { message: string } | null, operation: string): void {
   if (error) throw new Error(`${operation}: ${error.message}`);
 }
 
 /**
- * One scan per domain per 24h unless explicitly re-scanned (spec §10 caching
- * rule). Returns the existing scan when the cache holds.
+ * Automated and agent traffic may reuse a result for 24h. A human explicitly
+ * asking to scan gets the shorter per-domain safety cooldown: after one hour a
+ * new historical scan row is created. Cached responses carry their timestamp so
+ * a client can never present an old report as a newly completed scan.
  */
 /** Self-declared industry: only slugs from the pre-seeded taxonomy are
  *  recorded, so the backend never fills with free-text noise and growing
@@ -47,17 +59,25 @@ function normaliseSector(input?: string): string | null {
  *  the database (serverless instances share no memory); re-scans get a
  *  per-domain cooldown so nobody uses the scanner to hammer a third party. */
 const IP_SCANS_PER_HOUR = 10;
-const RESCAN_COOLDOWN_MS = 3600_000; // 1h
-const CACHE_WINDOW_MS = 24 * 3600_000; // spec §10
+export const RESCAN_COOLDOWN_MS = 3600_000; // 1h
+export const CACHE_WINDOW_MS = 24 * 3600_000; // automated/agent reuse
+
+export function cacheWindowForTrigger(trigger: ScanTrigger): number {
+  return trigger === "user" || trigger === "rescan" ? RESCAN_COOLDOWN_MS : CACHE_WINDOW_MS;
+}
+
+export function freshScanAvailableAt(completedAt: string): string {
+  return new Date(new Date(completedAt).getTime() + RESCAN_COOLDOWN_MS).toISOString();
+}
 
 export async function requestScan(opts: {
   url: string;
-  trigger: "user" | "rescan" | "agent" | "seed";
+  trigger: ScanTrigger;
   requesterType: "human" | "agent";
   userAgent?: string;
   sector?: string;
   ipHash?: string;
-}): Promise<{ slug: string; status: string; cached: boolean }> {
+}): Promise<ScanRequestResult> {
   const { domain } = validateTarget(opts.url);
   const supabase = db();
   const declaredSector = normaliseSector(opts.sector);
@@ -91,9 +111,10 @@ export async function requestScan(opts: {
 
   const slug = slugify(domain);
   if (site) {
-    // Fresh-enough result → serve it. Re-scans shorten the window rather than
-    // bypassing it, so the button can't be used to hammer a site.
-    const windowMs = opts.trigger === "rescan" ? RESCAN_COOLDOWN_MS : CACHE_WINDOW_MS;
+    // Fresh-enough result → report it explicitly as cached. Human scan actions
+    // use the one-hour safety cooldown; they never silently reuse a day-old
+    // report. Automated traffic keeps the wider resource-protection window.
+    const windowMs = cacheWindowForTrigger(opts.trigger);
     const { data: recent, error } = await supabase
       .from("scans")
       .select("slug, status, completed_at")
@@ -104,7 +125,15 @@ export async function requestScan(opts: {
       .limit(1)
       .maybeSingle();
     assertDb(error, "Could not read the scan cache");
-    if (recent) return { slug: recent.slug, status: "complete", cached: true };
+    if (recent?.completed_at) {
+      return {
+        slug: recent.slug,
+        status: "complete",
+        cached: true,
+        cachedAt: recent.completed_at,
+        freshScanAvailableAt: freshScanAvailableAt(recent.completed_at),
+      };
+    }
   }
 
   let siteId = site?.id;

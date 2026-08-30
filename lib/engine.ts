@@ -11,7 +11,7 @@
  * with rung + evidence only; percentiles arrive with the benchmark corpus.
  */
 
-import { probeWebMCP } from "./render";
+import { classifyWebMCPProbe, probeWebMCP } from "./render";
 import { safeFetchText, validatePublicUrl } from "./safe-http";
 import { siteUrl } from "./site";
 
@@ -1018,20 +1018,12 @@ async function checkD3(
     return;
   }
   const probe = await renderPromise!;
-  const verdict = !probe.ok
-    ? `render_unavailable:${probe.error ?? "unknown"}`
-    : probe.activeToolNames.length > 0
-      ? "active_tools_found"
-      : probe.declaredToolNames.length > 0
-        ? "manifest_declared_unverified"
-      : probe.registrationCodeDetected
-        ? "registration_code_unverified"
-        : "none_detected";
+  const classification = classifyWebMCPProbe(probe);
   signals.push({
     dimension: "D3",
     signalKey: "webmcp_registration",
-    valueText: verdict,
-    valueBool: probe.ok ? probe.activeToolNames.length > 0 : undefined,
+    valueText: classification.verdict,
+    valueBool: classification.valueBool,
     evidenceUrl: `${origin}/`,
     evidenceSnippet: probe.renderer ? `Rendered via ${probe.renderer}` : undefined,
     observedAt: now(),

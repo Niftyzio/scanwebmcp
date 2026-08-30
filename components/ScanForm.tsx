@@ -14,8 +14,13 @@ export default function ScanForm() {
   const [industryOpen, setIndustryOpen] = useState(false);
   const [industryQuery, setIndustryQuery] = useState("");
   const [activeIndustry, setActiveIndustry] = useState(0);
-  const [state, setState] = useState<"idle" | "scanning" | "error">("idle");
+  const [state, setState] = useState<"idle" | "scanning" | "cached" | "error">("idle");
   const [error, setError] = useState("");
+  const [cachedResult, setCachedResult] = useState<{
+    slug: string;
+    cachedAt?: string;
+    freshScanAvailableAt?: string;
+  } | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const industryTriggerRef = useRef<HTMLButtonElement>(null);
   const industrySearchRef = useRef<HTMLInputElement>(null);
@@ -81,6 +86,7 @@ export default function ScanForm() {
     if (!url.trim()) return;
     setState("scanning");
     setError("");
+    setCachedResult(null);
     try {
       const response = await fetch("/api/scan", {
         method: "POST",
@@ -89,6 +95,11 @@ export default function ScanForm() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Scan failed");
+      if (result.cached) {
+        setCachedResult(result);
+        setState("cached");
+        return;
+      }
       location.href = `/scan/${result.slug}`;
     } catch (caught) {
       setState("error");
@@ -109,7 +120,13 @@ export default function ScanForm() {
             inputMode="url"
             placeholder="yourbusiness.com"
             value={url}
-            onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => {
+              setUrl(event.target.value);
+              if (state === "cached") {
+                setState("idle");
+                setCachedResult(null);
+              }
+            }}
             disabled={state === "scanning"}
             aria-label="Website to scan"
             required
@@ -191,7 +208,22 @@ export default function ScanForm() {
           </div>
         )}
       </div>
-      {state === "error" && <p className="error">{error}</p>}
+      {state === "cached" && cachedResult ? (
+        <div className="scan-cache-notice" role="status">
+          <div>
+            <strong>A recent report already exists.</strong>
+            <span>
+              No new scan ran because this site was checked within the one-hour safety window.
+              {cachedResult.cachedAt ? ` Report time: ${new Date(cachedResult.cachedAt).toLocaleString()}.` : ""}
+            </span>
+            {cachedResult.freshScanAvailableAt ? (
+              <small>A fresh scan is available after {new Date(cachedResult.freshScanAvailableAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.</small>
+            ) : null}
+          </div>
+          <a href={`/scan/${cachedResult.slug}`}>View that report →</a>
+        </div>
+      ) : null}
+      {state === "error" ? <p className="error">{error}</p> : null}
     </form>
   );
 }
