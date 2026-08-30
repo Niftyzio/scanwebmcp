@@ -109,7 +109,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
   const scannedAt = new Date(scan.completed_at).toUTCString();
 
   return (
-    <main className="wrap">
+    <main className="wrap report-page">
       <WebMCPTools mode="scan" scan={scanData} />
       <RememberScan
         slug={scan.slug}
@@ -127,7 +127,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         </div>
         <div className="verdict-words">
           <h1 className="verdict">
-            <span className="domain">{domain}</span>: {RUNG_PLAIN[rung]}
+            <span className="domain">{domain}:</span> {RUNG_PLAIN[rung]}
           </h1>
           <p className="muted small">Agent Surface Score, out of 100. What it measures is on every line of this page.</p>
         </div>
@@ -253,7 +253,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
       </section>
       </>
       ) : (
-        <ReportGate slug={scan.slug} />
+        <ReportGate slug={scan.slug} domain={domain} score={scan.composite} />
       )}
     </main>
   );
