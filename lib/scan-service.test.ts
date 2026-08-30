@@ -28,5 +28,7 @@ describe("scan freshness", () => {
   it("reports exactly when a fresh scan becomes available", () => {
     expect(freshScanAvailableAt("2026-08-30T12:00:00.000Z"))
       .toBe("2026-08-30T13:00:00.000Z");
+    expect(freshScanAvailableAt("2026-08-30T12:00:00.000Z", CACHE_WINDOW_MS))
+      .toBe("2026-08-31T12:00:00.000Z");
   });
 });
