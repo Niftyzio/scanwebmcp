@@ -40,6 +40,11 @@ export default function LadderPage() {
         question for a business is no longer <em>whether</em> agents will visit, but what they find
         when they do: something to read, something to ask, something to call — or nothing at all.
       </p>
+      <p className="muted small">
+        Scope: the rubric measures businesses that sell products or services to buyers — firms
+        whose customers ask questions, enquire, book or order. Media, government and reference
+        sites sit outside its scope by design; their scores read as out-of-scope, not as verdicts.
+      </p>
       <p>
         The Ladder names five positions. A business sits on the highest rung it fully satisfies.
         Every rung is a position of opportunity: the point is never that you have failed a check,

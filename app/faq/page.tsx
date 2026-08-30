@@ -24,6 +24,10 @@ const FAQS: [string, string][] = [
     "Observed public signals only — what a visiting machine could see anyway — with evidence snippets capped at 500 characters. Nothing behind a login is ever requested. Full conduct rules, including our declared user agent and volume limits, are on the How we scan page, and you can opt out at any time.",
   ],
   [
+    "Is the scan right for every kind of website?",
+    "The rubric measures businesses that sell products or services to buyers — firms whose customers ask questions, enquire, book or order. Media, government and reference sites sit outside its scope by design: questions like discoverable pricing or an FAQ don't apply to a newspaper, so their scores read as out-of-scope, not as verdicts. If demand grows in a sector, we benchmark it properly rather than force-fit the rubric.",
+  ],
+  [
     "My score seems wrong. What do I do?",
     "Open the evidence section on your result page — every claim shows exactly what was observed and when. If the evidence itself is wrong, email sara@nocodelab.ai; corrections are logged and the page re-issued with a visible timestamp. If your site's firewall blocked our scanner, the page says so plainly rather than guessing.",
   ],
