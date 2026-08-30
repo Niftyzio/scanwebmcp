@@ -57,7 +57,7 @@ Report delivery is transactional and stored before sending. Failed delivery is t
 
 ## License
 
-[AGPL-3.0](LICENSE). The Agent Surface Ladder rubric text is © Sara Simeone. The hosted benchmark corpus and its private seed composition are not part of this repository.
+The source code is licensed under [AGPL-3.0](LICENSE), except for expressly marked content. The Agent Surface Ladder's authored rubric text is © 2026 Sara Simeone, all rights reserved, under its [separate content terms](LICENSES/LicenseRef-Agent-Surface-Ladder.txt). See [NOTICE.md](NOTICE.md) for the exact boundary and the treatment of earlier releases. The hosted benchmark corpus and its private seed composition are not part of this repository.
 
 ## Contributing and security
 

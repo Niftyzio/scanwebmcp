@@ -1,6 +1,14 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Sara Simeone
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 import type { Metadata } from "next";
 import WebMCPTools from "@/components/WebMCPTools";
 
+// SPDX-SnippetBegin
+// SPDX-License-Identifier: LicenseRef-Agent-Surface-Ladder
+// SPDX-SnippetCopyrightText: 2026 Sara Simeone
 export const metadata: Metadata = {
   title: "The Agent Surface Ladder v1.0",
   description:
@@ -22,11 +30,15 @@ const DIMENSIONS = [
   ["D4 Transactability", "How far from intent to commitment? We observe contact affordances, friction markers, and the path to action."],
   ["D5 Standing", "Would an agent trust and cite you? We observe entity clarity, named people, and consistency. (Deliberately coarse in v1.)"],
 ];
+// SPDX-SnippetEnd
 
 export default function LadderPage() {
   return (
     <main className="wrap article">
       <WebMCPTools mode="site" />
+      {/* SPDX-SnippetBegin
+          SPDX-License-Identifier: LicenseRef-Agent-Surface-Ladder
+          SPDX-SnippetCopyrightText: 2026 Sara Simeone */}
       <p className="kicker">Rubric version 1.0.0 · published August 2026 · by Sara Simeone (Agentic Sara)</p>
       <h1>The Agent Surface Ladder</h1>
       <p className="lede">
@@ -126,6 +138,11 @@ export default function LadderPage() {
         itself agent-callable, because a rubric about callability that an agent cannot call would be
         embarrassing.
       </p>
+      <p className="muted small">
+        Copyright © 2026 Sara Simeone. All rights reserved. The authored Ladder content is not
+        included in the scanner&apos;s open-source licence.
+      </p>
+      {/* SPDX-SnippetEnd */}
     </main>
   );
 }

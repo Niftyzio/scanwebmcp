@@ -49,7 +49,7 @@ const FAQS: [string, string][] = [
   ],
   [
     "Who is behind this?",
-    "Sara Simeone (Agentic Sara), author of the Agent Surface Ladder. The scanner's code is open source under AGPL-3.0; the rubric's method and the benchmark corpus are not part of that licence.",
+    "Sara Simeone (Agentic Sara), author of the Agent Surface Ladder. The scanner's source code is open source under AGPL-3.0. The Ladder's authored rubric text is separately © 2026 Sara Simeone, all rights reserved; the hosted benchmark corpus is not part of the repository's AGPL grant.",
   ],
 ];
 

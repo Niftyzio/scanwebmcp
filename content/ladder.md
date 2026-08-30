@@ -1,6 +1,13 @@
+<!--
+SPDX-FileCopyrightText: 2026 Sara Simeone
+SPDX-License-Identifier: LicenseRef-Agent-Surface-Ladder
+-->
+
 # The Agent Surface Ladder — v1.0
 
 *A published, versioned rubric for how much of a business an AI agent can see, understand, and act on. By Sara Simeone (Agentic Sara). Rubric version 1.0.0 · published August 2026.*
+
+*Copyright © 2026 Sara Simeone. All rights reserved. This authored rubric text is governed by the repository's [separate content terms](../LICENSES/LicenseRef-Agent-Surface-Ladder.txt).*
 
 AI agents stopped being hypothetical visitors this year. ChatGPT's desktop browser executes website-registered tools as of 25 August 2026; Chrome is trialling the same standard (WebMCP); Claude and ChatGPT have called MCP endpoints for over a year. The question for a business is no longer *whether* agents will visit, but what they find when they do: something to read, something to ask, something to call — or nothing at all.
 

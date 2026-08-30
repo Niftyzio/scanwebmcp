@@ -1,0 +1,11 @@
+Agent Surface Ladder authored content terms
+
+Copyright (C) 2026 Sara Simeone. All rights reserved.
+
+These terms apply only to material expressly identified with:
+
+    SPDX-License-Identifier: LicenseRef-Agent-Surface-Ladder
+
+No licence is granted to reproduce, modify, adapt, or redistribute that material, except with prior written permission from the copyright holder or as permitted by applicable law.
+
+These terms apply to covered material first distributed with this notice. They do not alter rights already granted in copies distributed under earlier terms.
