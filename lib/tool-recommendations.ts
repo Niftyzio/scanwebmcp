@@ -21,6 +21,7 @@ export interface ToolRecommendation {
   evidenceSignalKey: string;
   evidenceUrl: string;
   evidence: string;
+  basis?: "Observed capability" | "Observed gap";
 }
 
 const find = (signals: ToolSignal[], key: string) => signals.find((signal) => signal.signal_key === key);
@@ -254,11 +255,79 @@ export function recommendTools(signals: ToolSignal[], limit = 2): ToolRecommenda
     });
   }
 
-  return candidates
+  const ranked = candidates
     .filter((candidate, index, all) => all.findIndex((other) => other.name === candidate.name) === index)
     .sort((a, b) =>
       (b.businessValue * (6 - b.effort)) - (a.businessValue * (6 - a.effort))
       || (b.confidence === "High" ? 1 : 0) - (a.confidence === "High" ? 1 : 0),
-    )
-    .slice(0, limit);
+    );
+
+  // Older and sparse scans may expose only one positive capability. Fill the
+  // public two-card blueprint from observed gaps rather than inventing a tool
+  // or repeating a generic recommendation. These remain deterministic and
+  // link to the exact negative signal that justified the proposal.
+  const gapCandidates: ToolRecommendation[] = [];
+  const faq = find(signals, "faq_page_locatable");
+  if (faq?.value_bool === false) {
+    gapCandidates.push({
+      name: "answer_buyer_questions",
+      label: "Give agents grounded buyer answers",
+      description: "Publish the recurring questions buyers ask, then expose them as a grounded lookup an assistant can query before it recommends the business.",
+      inputs: ["Buyer question", "Optional service or situation"],
+      output: "A concise answer, relevant caveats and canonical source URL",
+      confirmation: "Not required — read only",
+      businessValue: 4,
+      effort: 2,
+      confidence: "Medium",
+      evidenceSignalKey: "faq_page_locatable",
+      evidenceUrl: faq.evidence_url,
+      evidence: "No FAQ or buyer-questions page was discoverable from the site's public navigation.",
+      basis: "Observed gap",
+    });
+  }
+
+  const serviceGap = find(signals, "services_page_locatable");
+  if (serviceGap?.value_bool === false) {
+    gapCandidates.push({
+      name: "match_buyer_to_service",
+      label: "Help agents identify the right service",
+      description: "Turn the business's service definitions and qualification rules into a lookup that tells an assistant what fits and why.",
+      inputs: ["Buyer need", "Optional constraints or urgency"],
+      output: "Matching services, fit rationale and the next step",
+      confirmation: "Not required — read only",
+      businessValue: 4,
+      effort: 3,
+      confidence: "Medium",
+      evidenceSignalKey: "services_page_locatable",
+      evidenceUrl: serviceGap.evidence_url,
+      evidence: "No services or offering page was discoverable from the site's public navigation.",
+      basis: "Observed gap",
+    });
+  }
+
+  const pricingGap = find(signals, "pricing_page_locatable");
+  if (pricingGap?.value_bool === false) {
+    gapCandidates.push({
+      name: "explain_pricing_and_fit",
+      label: "Let agents explain price and fit",
+      description: "Publish useful price bands and qualification context, then return them in a structured answer an assistant can compare responsibly.",
+      inputs: ["Service or product", "Buyer requirements"],
+      output: "Price band, inclusions, caveats and source URL",
+      confirmation: "Not required — read only",
+      businessValue: 4,
+      effort: 3,
+      confidence: "Medium",
+      evidenceSignalKey: "pricing_page_locatable",
+      evidenceUrl: pricingGap.evidence_url,
+      evidence: "No pricing page was discoverable from the site's public navigation.",
+      basis: "Observed gap",
+    });
+  }
+
+  for (const candidate of gapCandidates) {
+    if (ranked.length >= limit) break;
+    if (!ranked.some((other) => other.name === candidate.name)) ranked.push(candidate);
+  }
+
+  return ranked.slice(0, limit);
 }

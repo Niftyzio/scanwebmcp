@@ -4,7 +4,7 @@ export const metadata: Metadata = { title: "Opt out of scanning" };
 
 export default function OptOut() {
   return (
-    <main className="wrap article">
+    <main className="wrap article editorial-page">
       <h1>Opt out of scanning</h1>
       <p>
         If you&apos;d rather your domain weren&apos;t scanned or shown here, email{" "}

@@ -2,6 +2,7 @@ import WebMCPTools from "@/components/WebMCPTools";
 import ScanForm from "@/components/ScanForm";
 import RecentScans from "@/components/RecentScans";
 import AgentRotator from "@/components/AgentRotator";
+import AgentAccessRadar from "@/components/AgentAccessRadar";
 import { getObservatoryStats, type ObservatoryStats } from "@/lib/benchmark";
 import Image from "next/image";
 
@@ -112,35 +113,20 @@ function FeatureShowcase({ stats }: { stats: ObservatoryStats | null }) {
         </article>
 
         <article className="bento-card bento-profile">
-          <BentoHeading eyebrow="Five dimensions" title="See the shape behind the score" />
+          <BentoHeading eyebrow="AI crawler access" title="See which AI products the site welcomes" />
           <div className="radar-wrap">
-            <svg className="radar-chart" viewBox="0 0 240 220" role="img" aria-label="Example five-dimension scan profile for legibility, answerability, callability, transactability and standing">
-              <g className="radar-grid">
-                <polygon points="120,22 213,90 178,198 62,198 27,90" />
-                <polygon points="120,46 190,97 164,178 76,178 50,97" />
-                <polygon points="120,71 166,104 149,158 91,158 74,104" />
-                <line x1="120" y1="110" x2="120" y2="22" />
-                <line x1="120" y1="110" x2="213" y2="90" />
-                <line x1="120" y1="110" x2="178" y2="198" />
-                <line x1="120" y1="110" x2="62" y2="198" />
-                <line x1="120" y1="110" x2="27" y2="90" />
-              </g>
-              <polygon className="radar-value" points="120,43 174,98 142,143 108,128 61,97" />
-              <g className="radar-points">
-                <circle cx="120" cy="43" r="4" /><circle cx="174" cy="98" r="4" />
-                <circle cx="142" cy="143" r="4" /><circle cx="108" cy="128" r="4" />
-                <circle cx="61" cy="97" r="4" />
-              </g>
-              <g className="radar-labels">
-                <text x="120" y="13" textAnchor="middle">Read</text>
-                <text x="218" y="88">Answer</text>
-                <text x="183" y="211">Act</text>
-                <text x="57" y="211" textAnchor="end">Transact</text>
-                <text x="22" y="88" textAnchor="end">Standing</text>
-              </g>
-            </svg>
+            <AgentAccessRadar
+              axes={[
+                { label: "ChatGPT", detail: "explicitly allowed", treatment: "allowed" },
+                { label: "GPTBot", detail: "allowed by default", treatment: "default" },
+                { label: "Claude", detail: "explicitly allowed", treatment: "allowed" },
+                { label: "ClaudeBot", detail: "blocked", treatment: "blocked" },
+                { label: "Gemini", detail: "allowed by default", treatment: "default" },
+                { label: "Perplexity", detail: "explicitly allowed", treatment: "allowed" },
+              ]}
+            />
           </div>
-          <p className="muted small bento-caption">Example scan profile — the report includes scores and benchmark context for every axis.</p>
+          <p className="muted small bento-caption">Example access profile — the report distinguishes search discovery, model-use controls, blocks and unmeasured crawlers.</p>
         </article>
 
         <article className="bento-card bento-tools">

@@ -65,7 +65,7 @@ const JSON_LD = {
 
 export default function FaqPage() {
   return (
-    <main className="wrap article">
+    <main className="wrap article editorial-page editorial-faq">
       <WebMCPTools mode="site" />
       <script
         type="application/ld+json"

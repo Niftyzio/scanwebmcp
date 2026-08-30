@@ -7,6 +7,7 @@ import RememberScan from "@/components/RememberScan";
 import EmailReport from "@/components/EmailReport";
 import ReportGate from "@/components/ReportGate";
 import PromptPack from "@/components/PromptPack";
+import AgentAccessRadar, { type AccessTreatment } from "@/components/AgentAccessRadar";
 import { buildAgentView } from "@/lib/agent-view";
 import { getBenchmark, type DimKey } from "@/lib/benchmark";
 import { DIMENSIONS, signalLabel, signalPlain, describeSignalValue } from "@/lib/signal-glossary";
@@ -273,6 +274,21 @@ function AgentAccessMatrix({
     { product: "Perplexity", use: "Search discovery", key: "robots_perplexitybot", token: "PerplexityBot" },
   ];
   const verdict = (key: string) => signals.find((signal) => signal.signal_key === key)?.value_text;
+  const treatment = (key: string): AccessTreatment => {
+    const value = verdict(key);
+    if (value === "blocked") return "blocked";
+    if (value === "allowed" || value === "no_robots_txt") return "allowed";
+    if (value === "unmentioned") return "default";
+    return "unmeasured";
+  };
+  const detail = (key: string) => {
+    const value = verdict(key);
+    if (value === "blocked") return "blocked by published policy";
+    if (value === "allowed") return "explicitly allowed";
+    if (value === "unmentioned") return "unmentioned — allowed by default";
+    if (value === "no_robots_txt") return "no robots.txt restriction";
+    return "not measured in this scan";
+  };
 
   return (
     <section className="agent-access" aria-labelledby="agent-access">
@@ -283,6 +299,26 @@ function AgentAccessMatrix({
         training controls govern reuse for models. User-triggered agent visits are a separate class
         and are not reliably controlled by these robots.txt tokens.
       </p>
+      <div className="agent-access-visual">
+        <div>
+          <strong>Published access profile</strong>
+          <p className="muted small">
+            Outer points are welcomed; middle points are unmentioned and therefore allowed by
+            default; the centre means blocked or not measured. This is policy—not referral traffic.
+          </p>
+          <div className="access-radar-legend" aria-label="Access radar legend">
+            <span className="is-allowed">Allowed</span>
+            <span className="is-default">Allowed by default</span>
+            <span className="is-blocked">Blocked</span>
+            <span className="is-unmeasured">Unmeasured</span>
+          </div>
+        </div>
+        <AgentAccessRadar axes={rows.map((row) => ({
+          label: row.product,
+          detail: detail(row.key),
+          treatment: treatment(row.key),
+        }))} />
+      </div>
       <div className="access-table-wrap">
         <table className="access-table">
           <thead>
@@ -322,9 +358,9 @@ function ToolBlueprint({ domain, tools }: { domain: string; tools: ToolRecommend
       <p className="section-label">Agent capability blueprint</p>
       <h2 id="tool-blueprint">Tools this site could expose to agents</h2>
       <p className="muted tool-blueprint-lede">
-        These are deterministic recommendations from observed site capabilities—not invented by an
-        LLM. This report reveals up to two strong starting points; a deeper capability workshop can
-        map the rest.
+        These are deterministic recommendations from observed capabilities and measured gaps—not
+        invented by an LLM. This report reveals two evidence-linked starting points when the scan
+        contains enough evidence; a deeper capability workshop can map the rest.
       </p>
 
       {tools.length > 0 ? (
@@ -335,6 +371,9 @@ function ToolBlueprint({ domain, tools }: { domain: string; tools: ToolRecommend
                 <div className="tool-card-head">
                   <span className="tool-rank">0{index + 1}</span>
                   <div>
+                    <span className={`tool-basis ${tool.basis === "Observed gap" ? "is-gap" : ""}`}>
+                      {tool.basis ?? "Observed capability"}
+                    </span>
                     <code>{tool.name}</code>
                     <h3>{tool.label}</h3>
                   </div>

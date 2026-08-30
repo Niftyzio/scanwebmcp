@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function CaseStudy() {
   return (
-    <main className="wrap article">
+    <main className="wrap article editorial-page">
       <WebMCPTools mode="site" />
       <p className="kicker">Case study · 29 August 2026 · every claim links to stored evidence</p>
       <h1>Invisible to Callable in one night</h1>

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function MapPage() {
   return (
-    <main className="wrap article">
+    <main className="wrap article editorial-page editorial-map">
       <WebMCPTools mode="site" />
       <p className="kicker">The paid engagement behind the free scan · fixed scope · 1–2 weeks</p>
       <h1>The Agent Opportunity Map</h1>

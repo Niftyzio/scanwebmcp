@@ -61,4 +61,23 @@ describe("agent tool recommendations", () => {
     expect(tools[0]).toMatchObject({ name: "send_enquiry", confidence: "Medium" });
     expect(tools[1]).toMatchObject({ name: "get_business_profile", confidence: "High" });
   });
+
+  it("fills a sparse older scan to two recommendations from observed gaps", () => {
+    const tools = recommendTools([
+      signal({ signal_key: "llms_txt", value_bool: true, evidence_url: "https://example.com/llms.txt" }),
+      signal({ signal_key: "faq_page_locatable", value_bool: false, evidence_url: "https://example.com/" }),
+      signal({ signal_key: "services_page_locatable", value_bool: false, evidence_url: "https://example.com/" }),
+      signal({ signal_key: "pricing_page_locatable", value_bool: false, evidence_url: "https://example.com/" }),
+    ]);
+
+    expect(tools).toHaveLength(2);
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "get_business_profile",
+      "answer_buyer_questions",
+    ]);
+    expect(tools[1]).toMatchObject({
+      confidence: "Medium",
+      evidenceSignalKey: "faq_page_locatable",
+    });
+  });
 });

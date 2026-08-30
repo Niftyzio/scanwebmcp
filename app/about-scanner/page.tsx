@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function AboutScanner() {
   return (
-    <main className="wrap article">
+    <main className="wrap article editorial-page">
       <h1>How the scanner behaves</h1>
       <p>
         The Agent Surface Scan reads a site the way an AI agent would, and only that: public pages,
