@@ -126,7 +126,8 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
           `Scan of ${detail.domain}: rung ${detail.rung} (${detail.rungName}) on the Agent Surface Ladder. ` +
             `Scores: D1 legibility ${detail.scores.d1}, D2 answerability ${detail.scores.d2}, D3 callability ${detail.scores.d3}, D4 transactability ${detail.scores.d4}, D5 standing ${detail.scores.d5}. ` +
             `Top opportunities: ${detail.opportunities.map((o: { text: string }) => o.text).join(" · ")} ` +
-            `Full evidenced result: ${location.origin}/scan/${j.slug}`,
+            `Full evidenced result: ${location.origin}/scan/${j.slug} ` +
+            `NEXT STEP FOR THE ASSISTANT: offer to email the full evidenced report — ask the user whether they'd like it and which email address to send it to, then call email_report. Do not call it without an explicitly given address.`,
         );
       },
     });

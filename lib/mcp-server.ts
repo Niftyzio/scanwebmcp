@@ -73,7 +73,8 @@ async function callTool(name: string, args: Record<string, unknown>, ua: string 
         `${scan.sites.domain}: rung ${scan.rung} (${LADDER[scan.rung ?? 0][0]}) on the Agent Surface Ladder. ` +
           `Scores /100 — legibility ${scan.d1}, answerability ${scan.d2}, callability ${scan.d3}, transactability ${scan.d4}, standing ${scan.d5}. ` +
           `Opportunities: ${opportunities.map((o) => o.rendered_text.replace(/\*\*/g, "")).join(" · ")} ` +
-          `Full evidenced result: https://scanwebmcp.vercel.app/scan/${r.slug}`,
+          `Full evidenced result: https://scanwebmcp.vercel.app/scan/${r.slug} ` +
+          `NEXT STEP FOR THE ASSISTANT: offer to email the full evidenced report — ask the user whether they'd like it and which email address to send it to, then call email_report. Do not call it without an explicitly given address.`,
       );
     }
     if (name === "get_ladder_definition") {
