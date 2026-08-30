@@ -234,6 +234,28 @@ export function remoteBrowserProtocol(endpoint: string): "cdp" | "playwright" {
 }
 
 /**
+ * Browserless exposes Chromium through two different transports. WebMCP's
+ * launch-level feature switch is reliably applied by the CDP endpoint, while
+ * the native Playwright endpoint can expose the WebMCP protocol domain without
+ * making document.modelContext available to the page. Prefer CDP for Chromium
+ * but leave non-Chromium Playwright endpoints untouched.
+ */
+export function browserlessCDPEndpoint(base: string): string {
+  try {
+    const endpoint = new URL(base);
+    const path = endpoint.pathname.replace(/\/+$/, "");
+    if (/^\/(?:chromium|chrome)\/playwright$/i.test(path)) {
+      endpoint.pathname = path.replace(/\/playwright$/i, "");
+    } else if (/^\/playwright$/i.test(path)) {
+      endpoint.pathname = "/chromium";
+    }
+    return endpoint.toString();
+  } catch {
+    return base;
+  }
+}
+
+/**
  * Remote browser endpoint (e.g. Browserless) for serverless deploys that
  * cannot run Chromium. The env var holds the full wss:// URL including the
  * token; the WebMCP launch flag is appended unless the URL already sets one.
@@ -285,7 +307,7 @@ export function withWebMCPLaunchOptions(base: string): string {
 
 function remoteBrowserEndpoint(): string | undefined {
   const base = process.env.BROWSER_WS_ENDPOINT;
-  return base ? withWebMCPLaunchOptions(base) : undefined;
+  return base ? withWebMCPLaunchOptions(browserlessCDPEndpoint(base)) : undefined;
 }
 
 async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
@@ -322,25 +344,48 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
       ? await remoteContext.newPage()
       : await browser.newPage({ userAgent: SCANNER_UA });
 
-    const targetOrigin = new URL(url).origin;
-    await page.route("**/*", async (route) => {
-      const requestUrl = route.request().url();
-      if (/^(data|blob|about):/i.test(requestUrl)) return route.continue();
-      try {
-        if (new URL(requestUrl).origin === targetOrigin) return route.continue();
-      } catch {
-        // Invalid requests are aborted below.
-      }
-      await route.abort("blockedbyclient");
-    });
-
     const cdpTools: string[] = [];
     let protocolDomainAvailable = false;
-    try {
-      const cdp = await page.context().newCDPSession(page);
-      if (remoteProtocol === "cdp") {
-        await cdp.send("Network.setUserAgentOverride", { userAgent: SCANNER_UA });
+    const targetOrigin = new URL(url).origin;
+    const requestIsAllowed = (requestUrl: string): boolean => {
+      if (/^(data|blob|about):/i.test(requestUrl)) return true;
+      try {
+        return new URL(requestUrl).origin === targetOrigin;
+      } catch {
+        return false;
       }
+    };
+
+    let cdp: import("playwright-core").CDPSession | undefined;
+    try {
+      cdp = await page.context().newCDPSession(page);
+    } catch {
+      if (remoteProtocol === "cdp") throw new Error("cdp_session_unavailable");
+    }
+
+    if (remoteProtocol === "cdp" && cdp) {
+      // Playwright's page.route is not supported over Browserless CDP. Use
+      // the protocol Fetch domain instead so the SSRF boundary remains intact.
+      await cdp.send("Network.setUserAgentOverride", { userAgent: SCANNER_UA });
+      cdp.on("Fetch.requestPaused", (event) => {
+        const action = requestIsAllowed(event.request.url)
+          ? cdp?.send("Fetch.continueRequest", { requestId: event.requestId })
+          : cdp?.send("Fetch.failRequest", {
+              requestId: event.requestId,
+              errorReason: "BlockedByClient",
+            });
+        void action?.catch(() => undefined);
+      });
+      await cdp.send("Fetch.enable", { patterns: [{ urlPattern: "*" }] });
+    } else {
+      await page.route("**/*", async (route) => {
+        if (requestIsAllowed(route.request().url())) return route.continue();
+        await route.abort("blockedbyclient");
+      });
+    }
+
+    try {
+      if (!cdp) throw new Error("cdp_session_unavailable");
       cdp.on(
         "WebMCP.toolsAdded" as Parameters<typeof cdp.on>[0],
         (e) => {

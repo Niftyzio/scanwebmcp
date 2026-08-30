@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  browserlessCDPEndpoint,
   classifyWebMCPProbe,
   interpretRuntimeToolSnapshot,
   remoteBrowserProtocol,
@@ -62,6 +63,31 @@ describe("WebMCP runtime evidence", () => {
 });
 
 describe("remote browser transport", () => {
+  it("converts Browserless native Chromium endpoints to CDP", () => {
+    const endpoint = new URL(browserlessCDPEndpoint(
+      "wss://production-lon.browserless.io/chromium/playwright?token=secret&launch=%7B%7D",
+    ));
+    expect(endpoint.pathname).toBe("/chromium");
+    expect(endpoint.searchParams.get("token")).toBe("secret");
+    expect(endpoint.searchParams.get("launch")).toBe("{}");
+    expect(remoteBrowserProtocol(endpoint.toString())).toBe("cdp");
+  });
+
+  it("converts the shorthand native endpoint and preserves CDP endpoints", () => {
+    expect(new URL(browserlessCDPEndpoint(
+      "wss://production-lon.browserless.io/playwright?token=secret",
+    )).pathname).toBe("/chromium");
+    expect(new URL(browserlessCDPEndpoint(
+      "wss://production-lon.browserless.io/chrome?token=secret",
+    )).pathname).toBe("/chrome");
+  });
+
+  it("does not rewrite non-Chromium native endpoints", () => {
+    expect(new URL(browserlessCDPEndpoint(
+      "wss://production-lon.browserless.io/firefox/playwright?token=secret",
+    )).pathname).toBe("/firefox/playwright");
+  });
+
   it("uses CDP for Browserless root and chromium endpoints", () => {
     expect(remoteBrowserProtocol("wss://production-lon.browserless.io?token=secret")).toBe("cdp");
     expect(remoteBrowserProtocol("wss://production-lon.browserless.io/chromium?token=secret")).toBe("cdp");
