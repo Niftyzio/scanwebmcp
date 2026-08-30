@@ -218,15 +218,15 @@ body:has(.home-shell) .site-header .nav-scan { min-height: 2.7rem; padding: 0.55
 body:has(.home-shell) .site-footer { width: min(78rem, calc(100% - 3rem)); max-width: none; margin: 0 auto; padding: 2.5rem 0 4rem; }
 
 .home-shell { overflow: visible; }
-.home-hero { position: relative; min-height: 52rem; max-width: none; margin-top: -5rem; background: var(--bg); isolation: isolate; }
-.home-art { position: absolute; top: 0; left: 50%; z-index: -3; width: max(100%, 100rem); height: auto; max-width: none; transform: translateX(-50%); pointer-events: none; user-select: none; }
+.home-hero { position: relative; height: 100svh; min-height: 42rem; max-width: none; margin-top: -5rem; background: var(--bg); isolation: isolate; }
+.home-art { position: absolute; top: -5rem; left: 50%; z-index: -3; width: max(100%, 100rem); height: auto; max-width: none; transform: translateX(-50%); pointer-events: none; user-select: none; }
 .home-hero::before { content: ""; position: absolute; inset: 33% 18% -2rem 0; z-index: -1; background: linear-gradient(24deg, rgba(243,240,232,0.84), rgba(243,240,232,0.3) 62%, transparent 88%); pointer-events: none; }
 .home-hero::after { content: ""; position: absolute; inset: 0 0 -7rem; z-index: -1; background: linear-gradient(180deg, transparent 0%, transparent 78%, rgba(243,240,232,0.48) 88%, var(--bg) 95%, var(--bg) 100%), radial-gradient(ellipse 43% 25% at 50% 49%, rgba(255,254,250,0.58), rgba(255,254,250,0.1) 58%, transparent 78%); pointer-events: none; }
-.home-search { position: absolute; top: 56.7%; left: 50%; z-index: 3; width: 100%; padding: 0 1.5rem; transform: translate(-50%, -50%); }
+.home-search { position: absolute; top: calc(50% + 0.55rem); left: 50%; z-index: 3; width: 100%; padding: 0 1.5rem; transform: translate(-50%, -50%); }
 .home-search .scan-form { width: min(46rem, 100%); margin: 0 auto; text-align: left; }
 .home-search-meta { position: absolute; bottom: calc(100% + 0.55rem); left: 50%; display: flex; justify-content: center; gap: 0.65rem 1rem; width: max-content; max-width: calc(100% - 2rem); margin: 0; color: #454944; font-family: var(--mono); font-size: 0.73rem; font-weight: 600; letter-spacing: 0.035em; line-height: 1; text-shadow: 0 1px rgba(255,255,255,0.8); transform: translateX(-50%); white-space: nowrap; }
 .home-search-meta span + span::before { content: "·"; margin-right: 1rem; color: var(--accent); }
-.home-copy { position: absolute; left: max(2.5rem, calc((100% - 72rem) / 2)); bottom: 0; z-index: 2; width: min(38rem, calc(100% - 5rem)); }
+.home-copy { position: absolute; left: max(2.5rem, calc((100% - 72rem) / 2)); bottom: clamp(1.5rem, 4vh, 3.5rem); z-index: 2; width: min(38rem, calc(100% - 5rem)); }
 .home-hero h1 { max-width: 38rem; margin: 0; color: #292b28; font-family: var(--mono); font-size: clamp(2.7rem, 4vw, 3.35rem); font-weight: 400; line-height: 1.02; letter-spacing: -0.055em; text-wrap: balance; text-shadow: 0 1px rgba(255,255,255,0.5); }
 .home-headline-break { display: block; }
 .home-lede { margin: 1.35rem 0 0; color: #565b55; font-family: var(--mono); font-size: 0.92rem; line-height: 1.8; }
@@ -280,19 +280,19 @@ body:has(.home-shell) .site-footer { width: min(78rem, calc(100% - 3rem)); max-w
 @media (max-width: 860px) {
   body:has(.home-shell) .site-header { top: 0.55rem; width: min(100% - 1.25rem,78rem); margin-top: 0.55rem; }
   body:has(.home-shell) .site-header nav > a:not(.nav-scan), body:has(.home-shell) .site-header .nav-more { display: none; }
-  .home-hero { min-height: 58rem; margin-top: -4.5rem; }
-  .home-art { width: auto; height: 64rem; }
-  .home-search { top: 59%; }
-  .home-copy { top: 42rem; bottom: auto; left: 2rem; width: min(20.5rem, calc(100% - 4rem)); }
+  .home-hero { height: max(52rem, 100svh); min-height: 0; margin-top: -4.5rem; }
+  .home-art { top: -4.5rem; width: auto; height: 64rem; }
+  .home-search { top: 50%; }
+  .home-copy { top: auto; bottom: 2.75rem; left: 2rem; width: min(20.5rem, calc(100% - 4rem)); }
   .home-explainer { grid-template-columns: 1fr; gap: 3rem; padding: 9rem 0 7rem; }
 }
 
 @media (max-width: 640px) {
   body:has(.home-shell) .site-header { align-items: center; flex-direction: row; padding: 0.45rem; }
-  .home-hero { min-height: 60rem; margin-top: -4.6rem; }
-  .home-art { height: 66rem; }
-  .home-search { top: 56%; padding: 0 0.8rem; }
-  .home-copy { top: 43rem; left: 1.25rem; width: min(18.5rem, calc(100% - 2.5rem)); }
+  .home-hero { height: max(48rem, 100svh); min-height: 0; margin-top: -4.6rem; }
+  .home-art { top: -4.75rem; height: 61rem; }
+  .home-search { top: 50%; padding: 0 0.8rem; }
+  .home-copy { top: auto; bottom: 2.4rem; left: 1.25rem; width: min(18.5rem, calc(100% - 2.5rem)); }
   .home-hero h1 { font-size: clamp(2rem,9.5vw,2.65rem); }
   .home-search .scan-glass { gap: 0.45rem; min-height: 4rem; padding: 0.35rem 0.4rem 0.35rem 0.65rem; }
   .url-prefix { display: none; }
@@ -569,6 +569,7 @@ th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color
 
 /* Homepage scan control: isolate it from the legacy report-form button rules. */
 .home-search .scan-form .scan-glass {
+  width: 100%;
   min-height: 4.15rem;
   padding: 0.4rem 0.45rem 0.4rem 0.8rem;
 }
