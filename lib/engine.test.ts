@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   discoverPages,
   endpointsFromDiscovery,
+  extractFormCapabilities,
   homepageTransportError,
   htmlToVisibleText,
   parseJsonRpcBody,
@@ -23,6 +24,43 @@ describe("homepage transport failures", () => {
       { status: 403 },
       { status: 403 },
     )).toBeNull();
+  });
+});
+
+describe("form capability extraction", () => {
+  it("keeps a privacy-safe schema and classifies a quote form", () => {
+    const capabilities = extractFormCapabilities([{
+      url: "https://example.com/contact",
+      html: `<form id="quote-request" action="/api/quote" method="post">
+        <input type="hidden" name="csrf" value="secret">
+        <input name="email" type="email" required value="person@example.com">
+        <select name="service" required><option>Audit</option></select>
+        <textarea name="requirements"></textarea>
+        <button>Request a quote</button>
+      </form>`,
+    }]);
+
+    expect(capabilities).toEqual([expect.objectContaining({
+      purpose: "quote",
+      action: "https://example.com/api/quote",
+      method: "post",
+      submitLabel: "Request a quote",
+      fields: [
+        { name: "email", type: "email", required: true },
+        { name: "service", type: "select", required: true },
+        { name: "requirements", type: "textarea", required: false },
+      ],
+    })]);
+    expect(JSON.stringify(capabilities)).not.toContain("person@example.com");
+    expect(JSON.stringify(capabilities)).not.toContain("csrf");
+  });
+
+  it("deduplicates a repeated footer form", () => {
+    const html = `<form class="newsletter"><input name="email" type="email"><button>Subscribe</button></form>`;
+    expect(extractFormCapabilities([
+      { url: "https://example.com/", html },
+      { url: "https://example.com/about", html },
+    ])).toHaveLength(1);
   });
 });
 

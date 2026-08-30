@@ -65,20 +65,28 @@ export const SIGNALS: Record<string, SignalMeta> = {
     plain: "Whether robots.txt allows AgentSurfaceScan to fetch the page being measured.",
   },
   robots_gptbot: {
-    label: "OpenAI's crawler (GPTBot)",
-    plain: "What your robots.txt file tells the crawler behind ChatGPT.",
+    label: "OpenAI training crawler (GPTBot)",
+    plain: "Whether robots.txt permits OpenAI's crawler for potential model-training use. This is separate from ChatGPT search and user-requested visits.",
+  },
+  robots_oai_searchbot: {
+    label: "ChatGPT search crawler (OAI-SearchBot)",
+    plain: "Whether robots.txt permits the crawler OpenAI uses to surface sites in ChatGPT search answers.",
   },
   robots_claudebot: {
-    label: "Anthropic's crawler (ClaudeBot)",
-    plain: "What your robots.txt file tells the crawler behind Claude.",
+    label: "Anthropic training crawler (ClaudeBot)",
+    plain: "Whether robots.txt permits Anthropic's crawler for potential model-training use. This is separate from Claude search and user-requested visits.",
+  },
+  robots_claude_searchbot: {
+    label: "Claude search crawler (Claude-SearchBot)",
+    plain: "Whether robots.txt permits the crawler Anthropic uses to improve links and citations in Claude search results.",
   },
   robots_google_extended: {
-    label: "Google's AI crawler (Google-Extended)",
-    plain: "What your robots.txt file tells the crawler behind Gemini.",
+    label: "Google AI-use control (Google-Extended)",
+    plain: "Whether Google may use crawled content for Gemini training and grounding. It is a robots product token, not a separate crawler, and does not control Google Search inclusion.",
   },
   robots_perplexitybot: {
-    label: "Perplexity's crawler",
-    plain: "What your robots.txt file tells the crawler behind Perplexity.",
+    label: "Perplexity search crawler",
+    plain: "Whether robots.txt permits PerplexityBot to index content for Perplexity search results. Perplexity documents that it is not used for foundation-model training.",
   },
   llms_txt: {
     label: "Summary written for AI (llms.txt)",
@@ -148,6 +156,11 @@ export const SIGNALS: Record<string, SignalMeta> = {
     label: "Forms (capabilities-in-waiting)",
     plain:
       "Every form is a capability waiting to be exposed: the same fields, registered as a tool, let an assistant complete the enquiry on a buyer's behalf — with their confirmation.",
+  },
+  detected_form_capabilities: {
+    label: "Distinct form capabilities",
+    plain:
+      "A privacy-safe inventory of the public forms observed across scanned pages: purpose, field names and types, action route, and provider where identifiable. Field values and hidden fields are never retained.",
   },
   booking_embed: {
     label: "Online booking",
@@ -220,7 +233,9 @@ export function describeSignalValue(
     case "robots_scanner":
       return bool ? "this scanner is allowed" : "this scanner is blocked";
     case "robots_gptbot":
+    case "robots_oai_searchbot":
     case "robots_claudebot":
+    case "robots_claude_searchbot":
     case "robots_google_extended":
     case "robots_perplexitybot":
       return text === "blocked"
@@ -257,6 +272,8 @@ export function describeSignalValue(
       }
     case "forms_as_latent_tools":
       return `${num ?? 0} form${num === 1 ? "" : "s"} found`;
+    case "detected_form_capabilities":
+      return `${num ?? 0} distinct public form capabilit${num === 1 ? "y" : "ies"} mapped`;
     case "contact_affordances":
       switch (text) {
         case "email_and_form": return "email and form — agents have a path in";

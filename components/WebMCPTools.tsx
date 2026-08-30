@@ -23,6 +23,18 @@ type ScanData = {
   unlocked: boolean;
   scores: Record<string, number>;
   opportunities: { rank: number; text: string; impact: number; ease: number }[];
+  suggestedTools: {
+    name: string;
+    label: string;
+    description: string;
+    inputs: string[];
+    output: string;
+    confirmation: string;
+    businessValue: number;
+    effort: number;
+    confidence: string;
+    evidence: string;
+  }[];
   signals: {
     dimension: string;
     key: string;
@@ -69,7 +81,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
     // /make-callable.
     const toolNames =
       mode === "scan"
-        ? ["scan_agent_surface", "get_ladder_definition", "get_scan_findings", "get_evidence", "explain_opportunity", "rescan", "email_report"]
+        ? ["scan_agent_surface", "get_ladder_definition", "get_scan_findings", "get_recommended_tools", "get_evidence", "explain_opportunity", "rescan", "email_report"]
         : ["scan_agent_surface", "get_ladder_definition", "email_report"];
     try {
       (window as unknown as { __webmcpToolManifest?: string[] }).__webmcpToolManifest = toolNames;
@@ -264,6 +276,23 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
             : text(
                 `${scan.domain} is rung ${scan.rung} (${scan.rungName}). Scores /100: legibility ${scan.scores.d1}, answerability ${scan.scores.d2}, callability ${scan.scores.d3}, transactability ${scan.scores.d4}, standing ${scan.scores.d5}. ${GATE_INSTRUCTION}`,
               ),
+      });
+
+      register({
+        name: "get_recommended_tools",
+        description: scan.unlocked
+          ? `The two strongest evidence-backed agent tools this scan recommends for ${scan.domain}, including inputs, outputs, human-confirmation requirements, value, effort and confidence.`
+          : `Access the recommended agent tools for ${scan.domain}. This returns the email gate until the report is unlocked.`,
+        inputSchema: { type: "object", properties: {} },
+        execute: () => {
+          if (!scan.unlocked) return text(GATE_INSTRUCTION);
+          document.getElementById("tool-blueprint")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          if (scan.suggestedTools.length === 0)
+            return text("The public scan did not reach enough capability evidence to make a responsible tool recommendation.");
+          return text(scan.suggestedTools.map((tool, index) =>
+            `${index + 1}. ${tool.name} — ${tool.description} Inputs: ${tool.inputs.join(", ")}. Returns: ${tool.output}. Human control: ${tool.confirmation}. Value ${tool.businessValue}/5, effort ${tool.effort}/5, ${tool.confidence.toLowerCase()} confidence. Evidence: ${tool.evidence}`,
+          ).join(" | "));
+        },
       });
 
       register({
