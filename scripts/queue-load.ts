@@ -69,7 +69,7 @@ async function main() {
   console.log(
     `${rows.length} rows read · ${rows.length - fresh.length} already in corpus · ${queued} queued.`,
   );
-  console.log(`Queue now holds ${pending ?? 0} pending domains (~${Math.ceil((pending ?? 0) / 96)} days at the current drumbeat).`);
+  console.log(`Queue now holds ${pending ?? 0} pending domains (~${Math.ceil((pending ?? 0) / 144)} days at the current drumbeat).`);
 }
 
 main().catch((e) => {

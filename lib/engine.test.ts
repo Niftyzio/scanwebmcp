@@ -2,12 +2,29 @@ import { describe, expect, it } from "vitest";
 import {
   discoverPages,
   endpointsFromDiscovery,
+  homepageTransportError,
   htmlToVisibleText,
   parseJsonRpcBody,
   parseRobots,
   score,
   type Signal,
 } from "./engine";
+
+describe("homepage transport failures", () => {
+  it("retries when both homepage identities fail before receiving HTTP", () => {
+    expect(homepageTransportError(
+      { status: 0, error: "fetch failed: Invalid IP address: undefined [ERR_INVALID_IP_ADDRESS]" },
+      { status: 0, error: "fetch failed: Invalid IP address: undefined [ERR_INVALID_IP_ADDRESS]" },
+    )).toContain("ERR_INVALID_IP_ADDRESS");
+  });
+
+  it("keeps real HTTP responses as scan evidence", () => {
+    expect(homepageTransportError(
+      { status: 403 },
+      { status: 403 },
+    )).toBeNull();
+  });
+});
 
 describe("visible HTML text", () => {
   it("removes script and style bodies with spaced closing tags", () => {

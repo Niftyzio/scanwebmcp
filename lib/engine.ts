@@ -74,6 +74,16 @@ interface FetchOutcome {
   error?: string;
 }
 
+/** A transport-level homepage failure is not a measurement of the target.
+ * Retrying is safer than persisting a confident zero-score result. */
+export function homepageTransportError(
+  asBot: Pick<FetchOutcome, "status" | "error">,
+  asBrowser: Pick<FetchOutcome, "status" | "error">,
+): string | null {
+  if (asBot.status !== 0 || asBrowser.status !== 0) return null;
+  return asBot.error ?? asBrowser.error ?? "unknown transport error";
+}
+
 async function politeFetch(
   url: string,
   ua: string = SCANNER_UA,
@@ -294,6 +304,8 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
 
   // Homepage — two UAs, to separate thin content / bot walls / agent negotiation
   if (!scannerAllowed) errors.push("Homepage not fetched because robots.txt blocks AgentSurfaceScan.");
+  const transportError = scannerAllowed ? homepageTransportError(asBot, asBrowser) : null;
+  if (transportError) throw new Error(`Homepage transport failed: ${transportError}`);
   if (!asBot.ok && !asBrowser.ok)
     errors.push(`Homepage unreachable (${asBot.error ?? asBot.status}).`);
 
