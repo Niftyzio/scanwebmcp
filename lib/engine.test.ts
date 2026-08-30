@@ -7,6 +7,7 @@ import {
   htmlToVisibleText,
   parseJsonRpcBody,
   parseRobots,
+  robotsEvidenceSnippet,
   score,
   type Signal,
 } from "./engine";
@@ -100,6 +101,31 @@ Disallow: /scanner-only
     const split = parseRobots("User-agent: *\n\nUser-agent: GPTBot\nDisallow: /");
     expect(split.isAllowed("SomeBot", "/")).toBe(true);
     expect(split.isAllowed("GPTBot", "/")).toBe(false);
+  });
+
+  it("stores the relevant user-agent group instead of a chopped file prefix", () => {
+    const body = `# General crawlers
+User-agent: *
+Disallow: /private
+
+# AI products share a deliberate policy
+User-agent: GPTBot
+User-agent: ClaudeBot
+Allow: /
+Disallow: /ops/`;
+    expect(robotsEvidenceSnippet(body, "ClaudeBot")).toBe(
+      "User-agent: GPTBot\nUser-agent: ClaudeBot\nAllow: /\nDisallow: /ops/",
+    );
+    expect(robotsEvidenceSnippet(body, "PerplexityBot")).toBe(
+      "User-agent: *\nDisallow: /private",
+    );
+  });
+
+  it("marks exceptionally long relevant evidence with an ellipsis", () => {
+    const body = `User-agent: GPTBot\n${Array.from({ length: 40 }, (_, i) => `Disallow: /private-${i}`).join("\n")}`;
+    const excerpt = robotsEvidenceSnippet(body, "GPTBot");
+    expect(excerpt.length).toBeLessThanOrEqual(500);
+    expect(excerpt.endsWith("…")).toBe(true);
   });
 });
 

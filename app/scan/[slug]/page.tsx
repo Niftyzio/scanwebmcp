@@ -209,15 +209,30 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
           if (dimSignals.length === 0) return null;
           return (
             <div key={dim} className="evidence-dim">
-              <h3>
-                {DIMENSIONS[dim].question}{" "}
-                <span className="muted">— {scan[dim.toLowerCase() as "d1"] ?? "–"}/100</span>
-              </h3>
-              {dimSignals.map((s) => {
+              <div className="evidence-dim-head">
+                <div>
+                  <p className="section-label">{DIMENSIONS[dim].name} findings</p>
+                  <h3>{DIMENSIONS[dim].question}</h3>
+                  <p className="dimension-gloss">{DIMENSIONS[dim].gloss}</p>
+                </div>
+                <span className="dimension-score">{scan[dim.toLowerCase() as "d1"] ?? "–"}<small>/100</small></span>
+              </div>
+              {dimSignals.map((s, index) => {
                 const isWebMCP = s.signal_key.startsWith("webmcp_");
                 const toolNames: string[] = s.signal_key === "webmcp_tools_found"
                   ? String(s.value_text ?? "").split("|").filter(Boolean)
                   : [];
+                const findingValue = describeSignalValue(s.signal_key, {
+                  bool: s.value_bool,
+                  num: s.value_num == null ? null : Number(s.value_num),
+                  text: s.value_text,
+                });
+                const legacyRobotsExcerpt = s.signal_key.startsWith("robots_") &&
+                  s.evidence_snippet?.length === 300 &&
+                  !s.evidence_snippet.endsWith("…");
+                const evidenceSnippet = legacyRobotsExcerpt
+                  ? `${s.evidence_snippet}…`
+                  : s.evidence_snippet;
                 return (
                   <details
                     className={isWebMCP ? "evidence-card webmcp-evidence" : "evidence-card"}
@@ -226,34 +241,54 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
                     open={s.signal_key === "webmcp_tools_found"}
                   >
                     <summary>
-                      <span className="signal-label">{signalLabel(s.signal_key)}</span>
-                      <span className="sig-value">
-                        {describeSignalValue(s.signal_key, {
-                          bool: s.value_bool,
-                          num: s.value_num == null ? null : Number(s.value_num),
-                          text: s.value_text,
-                        })}
+                      <span className="finding-number">
+                        <small>Finding</small>
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span className="finding-summary-copy">
+                        <strong className="signal-label">{signalLabel(s.signal_key)}</strong>
+                        <span className="sig-value">{findingValue}</span>
+                      </span>
+                      <span className="finding-toggle">
+                        <span className="finding-toggle-closed">View evidence</span>
+                        <span className="finding-toggle-open">Hide evidence</span>
+                        <span className="finding-toggle-icon" aria-hidden="true">+</span>
                       </span>
                     </summary>
                     <div className="evidence-body">
-                      {signalPlain(s.signal_key) && <p>{signalPlain(s.signal_key)}</p>}
+                      {signalPlain(s.signal_key) && (
+                        <div className="evidence-explanation">
+                          <span>Why this matters</span>
+                          <p>{signalPlain(s.signal_key)}</p>
+                        </div>
+                      )}
                       {toolNames.length > 0 && (
                         <div className="webmcp-tool-list" aria-label="Live WebMCP tools found">
                           {toolNames.map((name) => <code key={name}>{name}</code>)}
                         </div>
                       )}
-                      <p className="signal-observation small">
-                        <span>Observed</span>{" "}
-                        <time dateTime={s.observed_at}>{new Date(s.observed_at).toUTCString()}</time>{" "}
-                        <span>at</span>{" "}
-                        <a href={s.evidence_url} target="_blank" rel="nofollow noopener noreferrer">
-                          {s.evidence_url}
-                        </a>
-                      </p>
-                      {s.evidence_snippet && toolNames.length === 0 && (
-                        <blockquote className="snippet">{s.evidence_snippet}</blockquote>
+                      <div className="evidence-source">
+                        <span>Evidence source</span>
+                        <p className="signal-observation small">
+                          <time dateTime={s.observed_at}>{new Date(s.observed_at).toUTCString()}</time>{" "}
+                          ·{" "}
+                          <a href={s.evidence_url} target="_blank" rel="nofollow noopener noreferrer">
+                            {s.evidence_url}
+                          </a>
+                        </p>
+                      </div>
+                      {evidenceSnippet && toolNames.length === 0 && (
+                        <div className="evidence-excerpt">
+                          <span>Observed excerpt</span>
+                          <blockquote className="snippet">{evidenceSnippet}</blockquote>
+                          {s.signal_key.startsWith("robots_") && (
+                            <a href={s.evidence_url} target="_blank" rel="nofollow noopener noreferrer">
+                              View the complete robots.txt ↗
+                            </a>
+                          )}
+                        </div>
                       )}
-                      <code className="sig-key">{s.signal_key}</code>
+                      <p className="technical-signal">Technical signal <code className="sig-key">{s.signal_key}</code></p>
                     </div>
                   </details>
                 );
