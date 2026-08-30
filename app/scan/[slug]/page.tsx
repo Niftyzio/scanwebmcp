@@ -15,10 +15,16 @@ import { sectorNoun } from "@/lib/sectors";
 import { hasReportAccess, REPORT_ACCESS_COOKIE } from "@/lib/report-access";
 import { siteUrl } from "@/lib/site";
 import { recommendTools, type ToolRecommendation } from "@/lib/tool-recommendations";
+import { summarizeLiveWebMCP } from "@/lib/report-summary";
 
 export const dynamic = "force-dynamic";
 
 const RUNGS = ["Invisible", "Readable", "Answerable", "Callable", "Transactable"];
+const WEBMCP_SIGNAL_ORDER = [
+  "webmcp_tools_found",
+  "webmcp_registration",
+  "webmcp_tools_declared",
+];
 
 /** Plain-English verdict per rung — what the word actually means for the owner. */
 const RUNG_PLAIN: Record<number, string> = {
@@ -77,6 +83,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
     value_text: signal.value_text,
     evidence_url: signal.evidence_url,
   })));
+  const { liveCount: liveWebMCPCount, measured: webMCPMeasured } = summarizeLiveWebMCP(signals);
   const scanData = {
     scanId: scan.id,
     domain,
@@ -134,6 +141,13 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         </div>
       </header>
 
+      <ReportHighlights
+        opportunityCount={toolRecommendations.length}
+        liveWebMCPCount={liveWebMCPCount}
+        webMCPMeasured={webMCPMeasured}
+        unlocked={unlocked}
+      />
+
       <div className="ladder-scale" role="img" aria-label={`This site is at step ${rung + 1} of 5 on the Agent Surface Ladder: ${RUNGS[rung]}`}>
         {RUNGS.map((name, i) => (
           <div key={name} className={`scale-step ${i < rung ? "passed" : ""} ${i === rung ? "current" : ""}`}>
@@ -156,6 +170,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         dims={{ d1: scan.d1, d2: scan.d2, d3: scan.d3, d4: scan.d4, d5: scan.d5 }}
       />
 
+      <span id="report-details" className="scroll-anchor" aria-hidden="true" />
       {unlocked ? (
       <>
       {!gateEnabled && <EmailReport slug={scan.slug} />}
@@ -182,7 +197,15 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
           generated; it is what a machine visiting {domain} actually received.
         </p>
         {(["D1", "D2", "D3", "D4", "D5"] as const).map((dim) => {
-          const dimSignals = signals.filter((s) => s.dimension === dim);
+          const dimSignals = signals
+            .filter((s) => s.dimension === dim)
+            .sort((a, b) => {
+              if (dim !== "D3") return 0;
+              const aRank = WEBMCP_SIGNAL_ORDER.indexOf(a.signal_key);
+              const bRank = WEBMCP_SIGNAL_ORDER.indexOf(b.signal_key);
+              return (aRank === -1 ? WEBMCP_SIGNAL_ORDER.length : aRank) -
+                (bRank === -1 ? WEBMCP_SIGNAL_ORDER.length : bRank);
+            });
           if (dimSignals.length === 0) return null;
           return (
             <div key={dim} className="evidence-dim">
@@ -190,30 +213,51 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
                 {DIMENSIONS[dim].question}{" "}
                 <span className="muted">— {scan[dim.toLowerCase() as "d1"] ?? "–"}/100</span>
               </h3>
-              {dimSignals.map((s) => (
-                <details key={s.id} id={`evidence-${s.signal_key}`}>
-                  <summary>
-                    {signalLabel(s.signal_key)}{" "}
-                    <span className="sig-value">
-                      {describeSignalValue(s.signal_key, {
-                        bool: s.value_bool,
-                        num: s.value_num == null ? null : Number(s.value_num),
-                        text: s.value_text,
-                      })}
-                    </span>
-                  </summary>
-                  {signalPlain(s.signal_key) && <p className="small">{signalPlain(s.signal_key)}</p>}
-                  <p className="small">
-                    Observed <time dateTime={s.observed_at}>{new Date(s.observed_at).toUTCString()}</time>{" "}
-                    at{" "}
-                    <a href={s.evidence_url} target="_blank" rel="nofollow noopener noreferrer">
-                      {s.evidence_url}
-                    </a>{" "}
-                    <code className="sig-key">{s.signal_key}</code>
-                  </p>
-                  {s.evidence_snippet && <blockquote className="snippet">{s.evidence_snippet}</blockquote>}
-                </details>
-              ))}
+              {dimSignals.map((s) => {
+                const isWebMCP = s.signal_key.startsWith("webmcp_");
+                const toolNames: string[] = s.signal_key === "webmcp_tools_found"
+                  ? String(s.value_text ?? "").split("|").filter(Boolean)
+                  : [];
+                return (
+                  <details
+                    className={isWebMCP ? "evidence-card webmcp-evidence" : "evidence-card"}
+                    key={s.id}
+                    id={`evidence-${s.signal_key}`}
+                    open={s.signal_key === "webmcp_tools_found"}
+                  >
+                    <summary>
+                      <span className="signal-label">{signalLabel(s.signal_key)}</span>
+                      <span className="sig-value">
+                        {describeSignalValue(s.signal_key, {
+                          bool: s.value_bool,
+                          num: s.value_num == null ? null : Number(s.value_num),
+                          text: s.value_text,
+                        })}
+                      </span>
+                    </summary>
+                    <div className="evidence-body">
+                      {signalPlain(s.signal_key) && <p>{signalPlain(s.signal_key)}</p>}
+                      {toolNames.length > 0 && (
+                        <div className="webmcp-tool-list" aria-label="Live WebMCP tools found">
+                          {toolNames.map((name) => <code key={name}>{name}</code>)}
+                        </div>
+                      )}
+                      <p className="signal-observation small">
+                        <span>Observed</span>{" "}
+                        <time dateTime={s.observed_at}>{new Date(s.observed_at).toUTCString()}</time>{" "}
+                        <span>at</span>{" "}
+                        <a href={s.evidence_url} target="_blank" rel="nofollow noopener noreferrer">
+                          {s.evidence_url}
+                        </a>
+                      </p>
+                      {s.evidence_snippet && toolNames.length === 0 && (
+                        <blockquote className="snippet">{s.evidence_snippet}</blockquote>
+                      )}
+                      <code className="sig-key">{s.signal_key}</code>
+                    </div>
+                  </details>
+                );
+              })}
             </div>
           );
         })}
@@ -257,6 +301,49 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         <ReportGate slug={scan.slug} domain={domain} score={scan.composite} />
       )}
     </main>
+  );
+}
+
+function ReportHighlights({
+  opportunityCount,
+  liveWebMCPCount,
+  webMCPMeasured,
+  unlocked,
+}: {
+  opportunityCount: number;
+  liveWebMCPCount: number;
+  webMCPMeasured: boolean;
+  unlocked: boolean;
+}) {
+  const webMCPHref = unlocked
+    ? `#evidence-${liveWebMCPCount > 0 ? "webmcp_tools_found" : "webmcp_registration"}`
+    : "#report-details";
+  return (
+    <section className="report-highlights" aria-labelledby="report-highlights-title">
+      <div className="report-highlights-intro">
+        <p className="section-label">Scan highlights</p>
+        <h2 id="report-highlights-title">What the scan uncovered</h2>
+        <p>
+          The counts stay public. The report below shows the named tools, supporting evidence and
+          the opportunities worth building first.
+        </p>
+      </div>
+      <div className="report-highlight-metrics">
+        <a className="report-highlight" href={unlocked ? "#tool-blueprint" : "#report-details"}>
+          <strong>{opportunityCount}</strong>
+          <span>tool opportunit{opportunityCount === 1 ? "y" : "ies"} identified</span>
+          <small>Grounded in observed site capabilities</small>
+        </a>
+        <a className="report-highlight is-webmcp" href={webMCPHref}>
+          <strong>{webMCPMeasured ? liveWebMCPCount : "—"}</strong>
+          <span>live WebMCP tool{liveWebMCPCount === 1 ? "" : "s"}</span>
+          <small>{webMCPMeasured ? "Verified in a live browser" : "Runtime check unavailable in this scan"}</small>
+        </a>
+      </div>
+      <a className="report-highlights-link" href="#report-details">
+        {unlocked ? "See names and evidence" : "Unlock names and evidence"} <span aria-hidden="true">↓</span>
+      </a>
+    </section>
   );
 }
 
