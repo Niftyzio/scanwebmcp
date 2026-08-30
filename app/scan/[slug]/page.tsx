@@ -7,7 +7,7 @@ import RememberScan from "@/components/RememberScan";
 import EmailReport from "@/components/EmailReport";
 import ReportGate from "@/components/ReportGate";
 import PromptPack from "@/components/PromptPack";
-import AgentAccessRadar, { type AccessTreatment } from "@/components/AgentAccessRadar";
+import AgentAccessConstellation, { type AccessTreatment } from "@/components/AgentAccessConstellation";
 import { buildAgentView } from "@/lib/agent-view";
 import { getBenchmark, type DimKey } from "@/lib/benchmark";
 import { DIMENSIONS, signalLabel, signalPlain, describeSignalValue } from "@/lib/signal-glossary";
@@ -301,19 +301,19 @@ function AgentAccessMatrix({
       </p>
       <div className="agent-access-visual">
         <div>
-          <strong>Published access profile</strong>
+          <strong>Published AI access map</strong>
           <p className="muted small">
-            Outer points are welcomed; middle points are unmentioned and therefore allowed by
-            default; the centre means blocked or not measured. This is policy—not referral traffic.
+            Every product sits at the same distance from the site. Colour and symbol show whether
+            it is allowed, allowed by default, blocked or unmeasured. This is policy—not traffic.
           </p>
-          <div className="access-radar-legend" aria-label="Access radar legend">
+          <div className="access-constellation-legend" aria-label="AI access map legend">
             <span className="is-allowed">Allowed</span>
             <span className="is-default">Allowed by default</span>
             <span className="is-blocked">Blocked</span>
             <span className="is-unmeasured">Unmeasured</span>
           </div>
         </div>
-        <AgentAccessRadar axes={rows.map((row) => ({
+        <AgentAccessConstellation axes={rows.map((row) => ({
           label: row.product,
           detail: detail(row.key),
           treatment: treatment(row.key),

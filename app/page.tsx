@@ -2,7 +2,7 @@ import WebMCPTools from "@/components/WebMCPTools";
 import ScanForm from "@/components/ScanForm";
 import RecentScans from "@/components/RecentScans";
 import AgentRotator from "@/components/AgentRotator";
-import AgentAccessRadar from "@/components/AgentAccessRadar";
+import AgentAccessConstellation from "@/components/AgentAccessConstellation";
 import { getObservatoryStats, type ObservatoryStats } from "@/lib/benchmark";
 import Image from "next/image";
 
@@ -113,9 +113,9 @@ function FeatureShowcase({ stats }: { stats: ObservatoryStats | null }) {
         </article>
 
         <article className="bento-card bento-profile">
-          <BentoHeading eyebrow="AI crawler access" title="See which AI products the site welcomes" />
-          <div className="radar-wrap">
-            <AgentAccessRadar
+          <BentoHeading eyebrow="AI crawler access" title="See which AI products can reach the site" />
+          <div className="constellation-wrap">
+            <AgentAccessConstellation
               axes={[
                 { label: "ChatGPT", detail: "explicitly allowed", treatment: "allowed" },
                 { label: "GPTBot", detail: "allowed by default", treatment: "default" },
@@ -126,7 +126,7 @@ function FeatureShowcase({ stats }: { stats: ObservatoryStats | null }) {
               ]}
             />
           </div>
-          <p className="muted small bento-caption">Example access profile — the report distinguishes search discovery, model-use controls, blocks and unmeasured crawlers.</p>
+          <p className="muted small bento-caption">Example radial access map — every product is equally weighted; its dot shows the site&apos;s published treatment.</p>
         </article>
 
         <article className="bento-card bento-tools">
