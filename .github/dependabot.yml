@@ -10,6 +10,12 @@ updates:
       timezone: Europe/London
     open-pull-requests-limit: 5
     rebase-strategy: auto
+    # Breaking upgrades need an explicit migration review. Security updates
+    # remain enabled independently in the repository settings.
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     groups:
       production:
         dependency-type: production
@@ -25,3 +31,7 @@ updates:
       timezone: Europe/London
     open-pull-requests-limit: 5
     rebase-strategy: auto
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
