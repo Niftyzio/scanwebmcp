@@ -4,6 +4,7 @@ import {
   classifyWebMCPProbe,
   interpretRuntimeToolSnapshot,
   isWebMCPProbeRequestAllowed,
+  pollRuntimeToolRegistry,
   remoteBrowserProtocol,
   withWebMCPLaunchOptions,
   type WebMCPProbe,
@@ -144,6 +145,23 @@ describe("WebMCP runtime tool discovery", () => {
       available: false,
       names: [],
     });
+  });
+
+  it("waits for the complete registry instead of keeping the first non-empty batch", async () => {
+    const five = ["about", "request_listing", "share_on_x", "share_on_linkedin", "record_unsupported_request"];
+    const six = [...five, "surprise_me"];
+    const snapshots = [five, five, six, six, six, six, six, six];
+    let reads = 0;
+    const waits: number[] = [];
+
+    const result = await pollRuntimeToolRegistry(
+      async () => JSON.stringify({ available: true, names: snapshots[reads++] }),
+      async (milliseconds) => { waits.push(milliseconds); },
+    );
+
+    expect(result).toEqual({ available: true, names: six });
+    expect(reads).toBe(8);
+    expect(waits).toEqual(Array(7).fill(500));
   });
 });
 
