@@ -16,6 +16,7 @@ import { hasReportAccess, REPORT_ACCESS_COOKIE } from "@/lib/report-access";
 import { siteUrl } from "@/lib/site";
 import { recommendTools, type ToolRecommendation } from "@/lib/tool-recommendations";
 import { summarizeLiveWebMCP } from "@/lib/report-summary";
+import { friendlyToolName } from "@/lib/tool-display";
 
 export const dynamic = "force-dynamic";
 
@@ -263,9 +264,14 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
                         </div>
                       )}
                       {toolNames.length > 0 && (
-                        <div className="webmcp-tool-list" aria-label="Live WebMCP tools found">
-                          {toolNames.map((name) => <code key={name}>{name}</code>)}
-                        </div>
+                        <ul className="webmcp-tool-list" aria-label="Live WebMCP tools found">
+                          {toolNames.map((name) => (
+                            <li key={name}>
+                              <strong>{friendlyToolName(name)}</strong>
+                              <code>{name}</code>
+                            </li>
+                          ))}
+                        </ul>
                       )}
                       <div className="evidence-source">
                         <span>Evidence source</span>
