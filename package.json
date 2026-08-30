@@ -22,12 +22,12 @@
     "undici": "7.29.0"
   },
   "devDependencies": {
-    "@types/node": "^24",
+    "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "playwright": "^1.62.1",
     "tsx": "4.23.13",
-    "typescript": "^5",
+    "typescript": "^7",
     "vitest": "4.1.11"
   }
 }
