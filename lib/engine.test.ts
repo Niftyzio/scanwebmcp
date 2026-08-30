@@ -2,11 +2,24 @@ import { describe, expect, it } from "vitest";
 import {
   discoverPages,
   endpointsFromDiscovery,
+  htmlToVisibleText,
   parseJsonRpcBody,
   parseRobots,
   score,
   type Signal,
 } from "./engine";
+
+describe("visible HTML text", () => {
+  it("removes script and style bodies with spaced closing tags", () => {
+    const html = `
+      <main>Useful content</main>
+      <script>secretScriptText()</script >
+      <style>.secretStyleText { display: none }</style\t>
+    `;
+
+    expect(htmlToVisibleText(html)).toBe("Useful content");
+  });
+});
 
 describe("robots policy", () => {
   const policy = parseRobots(`

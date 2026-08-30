@@ -12,14 +12,9 @@
  * Reads .env.local for Supabase credentials. Idempotent — re-running skips
  * scans that already have the signal.
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { loadLocalEnv } from "./load-local-env";
 
-// Load .env.local (tsx doesn't)
-for (const line of readFileSync(resolve(__dirname, "../.env.local"), "utf8").split("\n")) {
-  const m = line.match(/^([A-Z_]+)=(.+)$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
-}
+loadLocalEnv();
 
 const DRY_RUN = process.argv.includes("--dry-run");
 
@@ -63,7 +58,7 @@ async function main() {
     `${measured.size} scans have page signals; ${alreadyDone.size} already carry the library signal; backfilling ${targets.length}${DRY_RUN ? " (dry run)" : ""}…`,
   );
 
-  const tally: Record<string, number> = {};
+  const tally = new Map<string, number>();
   const failed: { domain: string; note: string }[] = [];
   let regenerated = 0;
   let done = 0;
@@ -82,7 +77,8 @@ async function main() {
             const home = await fetchHomepageForBackfill(origin);
             if (!home.ok) throw new Error(`homepage now unreachable (${home.status})`);
             const signal = await detectContentLibrary(origin, home.body, home.robotsPolicy);
-            tally[signal.valueText ?? "?"] = (tally[signal.valueText ?? "?"] ?? 0) + 1;
+            const outcome = signal.valueText ?? "?";
+            tally.set(outcome, (tally.get(outcome) ?? 0) + 1);
 
             if (!DRY_RUN) {
               const { error } = await supabase.from("signals").insert({
@@ -158,7 +154,7 @@ async function main() {
   });
 
   console.log(`\nDone: ${done - failed.length} backfilled, ${failed.length} failed.`);
-  console.log("Library detection outcomes:", JSON.stringify(tally, null, 1));
+  console.log("Library detection outcomes:", JSON.stringify(Object.fromEntries(tally), null, 1));
   console.log(`Opportunities re-derived for ${regenerated} scans (library template now shows).`);
   for (const f of failed) console.log(`  FAIL ${f.domain}: ${f.note}`);
 }

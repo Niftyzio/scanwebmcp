@@ -8,12 +8,9 @@
  * domains are skipped.
  */
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { loadLocalEnv } from "./load-local-env";
 
-for (const line of readFileSync(resolve(__dirname, "../.env.local"), "utf8").split("\n")) {
-  const m = line.match(/^([A-Z_]+)=(.+)$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
-}
+loadLocalEnv();
 
 async function main() {
   const { db } = await import("../lib/db");
