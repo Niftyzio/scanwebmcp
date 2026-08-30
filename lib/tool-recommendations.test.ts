@@ -19,7 +19,7 @@ describe("agent tool recommendations", () => {
 
     expect(tools).toHaveLength(2);
     expect(tools.map((tool) => tool.name)).toEqual(["search_insights", "book_appointment"]);
-    expect(tools.every((tool) => tool.evidenceUrl.startsWith("https://example.com"))).toBe(true);
+    expect(tools.every((tool) => new URL(tool.evidenceUrl).origin === "https://example.com")).toBe(true);
   });
 
   it("uses retained form fields for an evidence-backed quote tool", () => {
