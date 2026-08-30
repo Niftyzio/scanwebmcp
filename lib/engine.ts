@@ -229,6 +229,54 @@ export function parseRobots(body: string): RobotsPolicy {
   };
 }
 
+/** Keep robots evidence relevant to the checkpoint being explained. The full
+ * file is still linked, while the stored excerpt contains only the matched
+ * user-agent group instead of an arbitrary prefix cut off mid-directive. */
+export function robotsEvidenceSnippet(body: string, userAgent: string): string {
+  const sections: { agents: string[]; lines: string[] }[] = [];
+  let current: { agents: string[]; lines: string[] } | null = null;
+  let lastWasAgent = false;
+  for (const rawLine of body.split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*$/, "").trim();
+    if (!line) {
+      lastWasAgent = false;
+      continue;
+    }
+    const agent = line.match(/^user-agent:\s*(.+)$/i);
+    if (agent) {
+      if (!current || !lastWasAgent) {
+        current = { agents: [], lines: [] };
+        sections.push(current);
+      }
+      current.agents.push(agent[1].trim());
+      current.lines.push(`User-agent: ${agent[1].trim()}`);
+      lastWasAgent = true;
+      continue;
+    }
+    const directive = line.match(/^(allow|disallow|crawl-delay):\s*(.*)$/i);
+    if (current && directive) {
+      const name = `${directive[1][0].toUpperCase()}${directive[1].slice(1).toLowerCase()}`;
+      current.lines.push(`${name}: ${directive[2].trim()}`);
+    }
+    lastWasAgent = false;
+  }
+
+  const product = userAgent.split(/[\s/]/, 1)[0].toLowerCase();
+  const exact = sections.filter((section) =>
+    section.agents.some((agent) => agent.toLowerCase() === product),
+  );
+  const matched = exact.length > 0
+    ? exact
+    : sections.filter((section) => section.agents.some((agent) => agent === "*"));
+  if (matched.length === 0) {
+    return `No user-agent group mentions ${userAgent.split(/[\s/]/, 1)[0]}; no matching restriction was published.`;
+  }
+
+  const excerpt = matched.map((section) => section.lines.join("\n")).join("\n\n").trim();
+  if (excerpt.length <= 500) return excerpt;
+  return `${excerpt.slice(0, 499).trimEnd()}…`;
+}
+
 const ALLOW_ALL_ROBOTS: RobotsPolicy = {
   isAllowed: () => true,
   verdict: () => "unmentioned",
@@ -268,7 +316,7 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
       signalKey: `robots_${bot.toLowerCase().replace(/-/g, "_")}`,
       valueText: robotsIsText ? robotsPolicy.verdict(bot) : "no_robots_txt",
       evidenceUrl: `${origin}/robots.txt`,
-      evidenceSnippet: robotsIsText ? snippet(robots.body, 300) : undefined,
+      evidenceSnippet: robotsIsText ? robotsEvidenceSnippet(robots.body, bot) : undefined,
       observedAt: now(),
     });
   }
@@ -280,7 +328,7 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
     valueBool: scannerAllowed,
     valueText: robotsIsText ? (scannerAllowed ? "allowed" : "blocked") : "no_robots_txt",
     evidenceUrl: `${origin}/robots.txt`,
-    evidenceSnippet: robotsIsText ? snippet(robots.body, 300) : undefined,
+    evidenceSnippet: robotsIsText ? robotsEvidenceSnippet(robots.body, SCANNER_UA) : undefined,
     observedAt: now(),
   });
 
