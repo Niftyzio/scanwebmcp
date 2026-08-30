@@ -56,7 +56,7 @@ const SNIPPET = `<script>
 
 export default function MakeCallable() {
   return (
-    <main className="wrap article">
+    <main className="wrap article editorial-page editorial-guide">
       <WebMCPTools mode="site" />
       <p className="kicker">Implementation guide · kept current with the WebMCP spec · updated 29 Aug 2026</p>
       <h1>Make your site agent-callable</h1>

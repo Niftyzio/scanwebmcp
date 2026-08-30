@@ -17,7 +17,7 @@ export default async function Observatory() {
   const totalGraded = Object.values(s.rungDist).reduce((a, b) => a + b, 0) || 1;
 
   return (
-    <main className="wrap">
+    <main className="wrap editorial-page editorial-observatory">
       <WebMCPTools mode="site" />
       <p className="kicker">Live corpus data · updates with every scan · started 29 August 2026</p>
       <h1>The Agent Surface Observatory</h1>

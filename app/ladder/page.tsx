@@ -34,7 +34,7 @@ const DIMENSIONS = [
 
 export default function LadderPage() {
   return (
-    <main className="wrap article">
+    <main className="wrap article editorial-page editorial-ladder">
       <WebMCPTools mode="site" />
       {/* SPDX-SnippetBegin
           SPDX-License-Identifier: LicenseRef-Agent-Surface-Ladder
