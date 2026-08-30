@@ -297,6 +297,8 @@ export function describeSignalValue(
     case "webmcp_registration":
       if (text?.startsWith("render_unavailable"))
         return "couldn't be checked this time — the renderer was unavailable, so this is unmeasured, not counted against you";
+      if (text?.startsWith("runtime_witness_unavailable"))
+        return "the page rendered, but this browser could not witness WebMCP registrations — unmeasured, not counted against you";
       if (text === "render_skipped_degraded_scan")
         return "not checked — the site's wall stopped the scan before this step";
       switch (text) {

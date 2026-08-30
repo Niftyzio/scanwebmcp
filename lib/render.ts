@@ -37,6 +37,9 @@ export interface WebMCPProbe {
   declaredToolNames: string[];
   registrationCodeDetected: boolean;
   modelContextPresent: boolean;
+  /** True only when the browser protocol could observe registerTool events.
+   * A rendered page without this witness is unmeasured, never a negative. */
+  witnessAvailable: boolean;
   renderer?: "firecrawl" | "playwright" | "playwright-remote";
   error?: string;
 }
@@ -50,7 +53,7 @@ const PROBE_SCRIPT = `JSON.stringify({
 })`;
 
 function probeFailure(error: string, renderer?: WebMCPProbe["renderer"]): WebMCPProbe {
-  return { ok: false, activeToolNames: [], declaredToolNames: [], registrationCodeDetected: false, modelContextPresent: false, renderer, error };
+  return { ok: false, activeToolNames: [], declaredToolNames: [], registrationCodeDetected: false, modelContextPresent: false, witnessAvailable: false, renderer, error };
 }
 
 /** Interpret a probe-script return value plus rendered HTML into a verdict. */
@@ -74,7 +77,39 @@ function interpretProbe(
   const registrationCodeDetected =
     /modelContext\s*\.\s*registerTool|registerTool\s*\(\s*\{|__webmcpToolManifest|data-webmcp-tools/.test(html);
 
-  return { ok: true, activeToolNames: [], declaredToolNames, registrationCodeDetected, modelContextPresent: present, renderer };
+  return { ok: true, activeToolNames: [], declaredToolNames, registrationCodeDetected, modelContextPresent: present, witnessAvailable: false, renderer };
+}
+
+export function classifyWebMCPProbe(probe: WebMCPProbe): {
+  verdict: string;
+  valueBool: boolean | undefined;
+} {
+  if (!probe.ok) {
+    return {
+      verdict: `render_unavailable:${probe.error ?? "unknown"}`,
+      valueBool: undefined,
+    };
+  }
+  if (probe.activeToolNames.length > 0) {
+    return { verdict: "active_tools_found", valueBool: true };
+  }
+  if (!probe.witnessAvailable) {
+    return {
+      verdict: probe.declaredToolNames.length > 0
+        ? "runtime_witness_unavailable_manifest_declared"
+        : probe.registrationCodeDetected
+          ? "runtime_witness_unavailable_code_detected"
+          : "runtime_witness_unavailable",
+      valueBool: undefined,
+    };
+  }
+  if (probe.declaredToolNames.length > 0) {
+    return { verdict: "manifest_declared_unverified", valueBool: false };
+  }
+  if (probe.registrationCodeDetected) {
+    return { verdict: "registration_code_unverified", valueBool: false };
+  }
+  return { verdict: "none_detected", valueBool: false };
 }
 
 async function probeViaFirecrawl(url: string): Promise<WebMCPProbe> {
@@ -194,6 +229,7 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
     const raw = await page.evaluate(PROBE_SCRIPT);
     const html = await page.content();
     const probe = interpretProbe(raw, html, endpoint ? "playwright-remote" : "playwright");
+    probe.witnessAvailable = cdpObserved;
     if (cdpObserved && cdpTools.length > 0) {
       // Live registrations observed against a real modelContext: report those
       // names (deduped with any manifest) and mark the context active.
