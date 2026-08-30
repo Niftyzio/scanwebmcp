@@ -21,7 +21,7 @@ export interface ScanRecord {
   error: string | null;
 }
 
-const slugify = (domain: string) =>
+export const slugify = (domain: string) =>
   domain.replace(/^www\./, "").replace(/[^a-z0-9.]+/gi, "-").toLowerCase();
 
 /**

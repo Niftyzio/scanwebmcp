@@ -3,8 +3,10 @@
  * the spec: same capabilities as the WebMCP layer, callable by Claude and
  * ChatGPT apps today. Tools-only; no sessions, no SSE stream needed.
  */
-import { requestScan, getScanPage, logAgentHit } from "./scan-service";
+import { requestScan, getScanPage, logAgentHit, slugify } from "./scan-service";
 import { getObservatoryStats } from "./benchmark";
+import { captureReportLead, LeadError } from "./leads";
+import { validateTarget } from "./engine";
 
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -31,6 +33,22 @@ const TOOLS = [
     name: "get_ladder_definition",
     description: "The published Agent Surface Ladder v1.0 rubric — rungs, definitions, and scoring weights.",
     inputSchema: { type: "object", properties: { rung: { type: "number", description: "Optional rung 0-4" } } },
+  },
+  {
+    name: "email_report",
+    description:
+      "Send the full evidenced Agent Surface Scan report for an already-scanned website to an email address. " +
+      "CONSEQUENTIAL — this subscribes the address to the report plus occasional benchmark updates (unsubscribe any time). " +
+      "Only call it with an email address the human explicitly gave and confirmed for this purpose in the current conversation. Never guess, look up, or auto-fill an address.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "The scanned website, e.g. example.com" },
+        email: { type: "string", description: "The email address the human explicitly provided and confirmed." },
+      },
+      required: ["url", "email"],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "get_observatory_stats",
@@ -67,6 +85,23 @@ async function callTool(name: string, args: Record<string, unknown>, ua: string 
           LADDER.map((l, i) => `${i} ${l[0]} — ${l[1]}`).join(" | ") +
           " Full method: https://scanwebmcp.vercel.app/ladder",
       );
+    }
+    if (name === "email_report") {
+      const { domain } = validateTarget(String(args.url ?? ""));
+      const slug = slugify(domain);
+      try {
+        const r = await captureReportLead({ email: String(args.email ?? ""), slug });
+        await logAgentHit({ toolName: name, argumentsJson: { url: args.url }, agentUa: ua ?? undefined, outcome: "ok" });
+        return text(
+          `Report for ${r.domain} sent to ${String(args.email).trim().toLowerCase()}. It links the live evidenced result at https://scanwebmcp.vercel.app/scan/${slug}. They'll also get occasional benchmark updates and can unsubscribe any time.`,
+        );
+      } catch (e) {
+        if (e instanceof LeadError) {
+          await logAgentHit({ toolName: name, argumentsJson: { url: args.url }, agentUa: ua ?? undefined, outcome: "refused" }).catch(() => {});
+          return { ...text(`Report not sent: ${e.message}${e.status === 404 ? " Run scan_agent_surface first." : ""}`), isError: true };
+        }
+        throw e;
+      }
     }
     if (name === "get_observatory_stats") {
       const s = await getObservatoryStats();

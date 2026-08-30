@@ -63,7 +63,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
     // /make-callable.
     const toolNames =
       mode === "scan"
-        ? ["scan_agent_surface", "get_ladder_definition", "get_scan_findings", "get_evidence", "explain_opportunity", "rescan"]
+        ? ["scan_agent_surface", "get_ladder_definition", "get_scan_findings", "get_evidence", "explain_opportunity", "rescan", "email_report"]
         : ["scan_agent_surface", "get_ladder_definition"];
     try {
       (window as unknown as { __webmcpToolManifest?: string[] }).__webmcpToolManifest = toolNames;
@@ -81,6 +81,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
       name: string;
       description: string;
       inputSchema: object;
+      annotations?: object;
       execute: (args: Record<string, unknown>) => Promise<unknown> | unknown;
     }) => {
       try {
@@ -209,6 +210,44 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
           const el = document.getElementById(`opportunity-${o.rank}`);
           el?.scrollIntoView({ behavior: "smooth", block: "center" });
           return text(`Opportunity ${o.rank} (impact ${o.impact}/5, ease ${o.ease}/5): ${o.text}`);
+        },
+      });
+
+      register({
+        name: "email_report",
+        description:
+          `Send the full evidenced report for ${scan.domain} to an email address, and unlock the complete report on this page. ` +
+          "CONSEQUENTIAL — this subscribes the address to the report plus occasional benchmark updates (unsubscribe any time). " +
+          "Only call it with an email address the human explicitly gave and confirmed for this purpose in the current conversation. Never guess, look up, or auto-fill an address.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            email: {
+              type: "string",
+              description: "The email address the human explicitly provided and confirmed.",
+            },
+          },
+          required: ["email"],
+        },
+        annotations: { readOnly: false, consequential: true },
+        execute: async ({ email }) => {
+          const res = await fetch("/api/report-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, slug: scan.slug }),
+          });
+          const j = await res.json();
+          if (!res.ok) return text(`Report not sent: ${j.error}`);
+          try {
+            // Same key ReportGate reads — the human watches their page unlock.
+            localStorage.setItem("agent-scan-unlocked", "yes");
+          } catch {
+            /* private window: the emailed report still arrives */
+          }
+          setTimeout(() => location.reload(), 1200);
+          return text(
+            `Report for ${scan.domain} sent to ${email}, and the full report is now unlocked on this page (reloading). They'll also get occasional benchmark updates and can unsubscribe any time.`,
+          );
         },
       });
 
