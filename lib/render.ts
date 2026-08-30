@@ -78,6 +78,35 @@ const RUNTIME_TOOLS_SCRIPT = `(async () => {
   }
 })()`;
 
+/**
+ * Keep the rendered probe behind a strict network boundary without breaking
+ * platform-provided WebMCP runtimes. Most third-party traffic remains blocked;
+ * only audited, script-only bootstrap paths are allowed across origins.
+ *
+ * Shopify injects its WebMCP adapter from cdn.shopify.com on every supported
+ * storefront. Blocking that script leaves document.modelContext available but
+ * its registry empty, which is indistinguishable from a site with no tools.
+ */
+export function isWebMCPProbeRequestAllowed(
+  requestUrl: string,
+  targetOrigin: string,
+  resourceType?: string,
+): boolean {
+  if (/^(data|blob|about):/i.test(requestUrl)) return true;
+  try {
+    const request = new URL(requestUrl);
+    if (request.origin === targetOrigin) return true;
+    if (request.protocol !== "https:" || resourceType?.toLowerCase() !== "script") return false;
+
+    if (request.hostname.toLowerCase() !== "cdn.shopify.com") return false;
+    return request.pathname.startsWith("/storefront/webmcp/")
+      || request.pathname === "/storefront/standard-actions.js"
+      || /^\/shopifycloud\/storefront\/assets\/storefront\/origin_trials-[a-z0-9._-]+\.js$/i.test(request.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export function interpretRuntimeToolSnapshot(raw: unknown): {
   available: boolean;
   names: string[];
@@ -347,15 +376,6 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
     const cdpTools: string[] = [];
     let protocolDomainAvailable = false;
     const targetOrigin = new URL(url).origin;
-    const requestIsAllowed = (requestUrl: string): boolean => {
-      if (/^(data|blob|about):/i.test(requestUrl)) return true;
-      try {
-        return new URL(requestUrl).origin === targetOrigin;
-      } catch {
-        return false;
-      }
-    };
-
     let cdp: import("playwright-core").CDPSession | undefined;
     try {
       cdp = await page.context().newCDPSession(page);
@@ -368,7 +388,7 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
       // the protocol Fetch domain instead so the SSRF boundary remains intact.
       await cdp.send("Network.setUserAgentOverride", { userAgent: SCANNER_UA });
       cdp.on("Fetch.requestPaused", (event) => {
-        const action = requestIsAllowed(event.request.url)
+        const action = isWebMCPProbeRequestAllowed(event.request.url, targetOrigin, event.resourceType)
           ? cdp?.send("Fetch.continueRequest", { requestId: event.requestId })
           : cdp?.send("Fetch.failRequest", {
               requestId: event.requestId,
@@ -379,7 +399,11 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
       await cdp.send("Fetch.enable", { patterns: [{ urlPattern: "*" }] });
     } else {
       await page.route("**/*", async (route) => {
-        if (requestIsAllowed(route.request().url())) return route.continue();
+        if (isWebMCPProbeRequestAllowed(
+          route.request().url(),
+          targetOrigin,
+          route.request().resourceType(),
+        )) return route.continue();
         await route.abort("blockedbyclient");
       });
     }
@@ -401,13 +425,19 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
     }
 
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 12_000 });
-    // Same settle window as the Firecrawl path, so both renderers measure the
-    // same thing: tools registered within 2.5s of DOM ready.
-    await page.waitForTimeout(1_500);
+    // Tool adapters can arrive after DOM ready (Shopify injects its adapter
+    // from a CDN). Poll the live registry for a bounded window instead of
+    // taking a single early snapshot and permanently recording a false zero.
+    await page.waitForTimeout(1_000);
+    let runtimeSnapshot = { available: false, names: [] as string[] };
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      runtimeSnapshot = interpretRuntimeToolSnapshot(
+        await page.evaluate(RUNTIME_TOOLS_SCRIPT).catch(() => undefined),
+      );
+      if (cdpTools.length > 0 || runtimeSnapshot.names.length > 0) break;
+      if (attempt < 7) await page.waitForTimeout(500);
+    }
     const raw = await page.evaluate(PROBE_SCRIPT);
-    const runtimeSnapshot = interpretRuntimeToolSnapshot(
-      await page.evaluate(RUNTIME_TOOLS_SCRIPT).catch(() => undefined),
-    );
     const html = await page.content();
     const probe = interpretProbe(raw, html, endpoint ? "playwright-remote" : "playwright");
     const observedTools = [...new Set([...cdpTools, ...runtimeSnapshot.names])].slice(0, 25);
