@@ -215,13 +215,11 @@ async function probeViaFirecrawl(url: string): Promise<WebMCPProbe> {
   }
 }
 
-// Browserless allows --enable-features on every plan, while Chromium also
-// documents --enable-blink-features for direct local launches. Send both so
-// the same probe works with hosted and local Chrome builds.
-const WEBMCP_LAUNCH_ARGS = [
-  "--enable-features=WebMCP",
-  "--enable-blink-features=WebMCP",
-];
+// Browserless allows --enable-features on every plan. Its unrestricted flag
+// set (including --enable-blink-features) is Enterprise-only, and mixing an
+// unsupported flag into launch.args can leave the whole hosted session without
+// WebMCP. This base-feature switch also works for our local Chromium probe.
+const WEBMCP_LAUNCH_ARGS = ["--enable-features=WebMCP"];
 
 /** Browserless uses CDP at its root/chromium endpoints and the native
  * Playwright protocol only at paths ending in /playwright. */
@@ -240,12 +238,54 @@ export function remoteBrowserProtocol(endpoint: string): "cdp" | "playwright" {
  * cannot run Chromium. The env var holds the full wss:// URL including the
  * token; the WebMCP launch flag is appended unless the URL already sets one.
  */
+export function withWebMCPLaunchOptions(base: string): string {
+  try {
+    const endpoint = new URL(base);
+    const encodedLaunch = endpoint.searchParams.get("launch");
+    let launch: Record<string, unknown> = {};
+    if (encodedLaunch) {
+      try {
+        launch = JSON.parse(encodedLaunch) as Record<string, unknown>;
+      } catch {
+        // Browserless also accepts base64-encoded launch JSON.
+        launch = JSON.parse(Buffer.from(encodedLaunch, "base64").toString("utf8")) as Record<string, unknown>;
+      }
+    }
+
+    const existingArgs = Array.isArray(launch.args)
+      ? launch.args.filter((arg): arg is string => typeof arg === "string")
+      : [];
+    const compatibleArgs: string[] = [];
+    let baseFeatures: string[] = [];
+    for (const arg of existingArgs) {
+      if (arg.startsWith("--enable-features=")) {
+        baseFeatures.push(...arg.slice("--enable-features=".length).split(",").filter(Boolean));
+        continue;
+      }
+      if (arg.startsWith("--enable-blink-features=")) {
+        const remaining = arg
+          .slice("--enable-blink-features=".length)
+          .split(",")
+          .filter((feature) => feature && feature !== "WebMCP");
+        if (remaining.length > 0) compatibleArgs.push(`--enable-blink-features=${remaining.join(",")}`);
+        continue;
+      }
+      compatibleArgs.push(arg);
+    }
+    baseFeatures = [...new Set([...baseFeatures, "WebMCP"])];
+    compatibleArgs.push(`--enable-features=${baseFeatures.join(",")}`);
+    endpoint.searchParams.set("launch", JSON.stringify({ ...launch, args: compatibleArgs }));
+    return endpoint.toString();
+  } catch {
+    // Never replace a configured endpoint if its launch payload cannot be
+    // understood; the renderer will report the runtime as unavailable.
+    return base;
+  }
+}
+
 function remoteBrowserEndpoint(): string | undefined {
   const base = process.env.BROWSER_WS_ENDPOINT;
-  if (!base) return undefined;
-  if (base.includes("launch=")) return base;
-  const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}launch=${encodeURIComponent(JSON.stringify({ args: WEBMCP_LAUNCH_ARGS }))}`;
+  return base ? withWebMCPLaunchOptions(base) : undefined;
 }
 
 async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
