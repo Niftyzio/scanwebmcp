@@ -3,6 +3,7 @@ import {
   browserlessCDPEndpoint,
   classifyWebMCPProbe,
   interpretRuntimeToolSnapshot,
+  isWebMCPProbeRequestAllowed,
   remoteBrowserProtocol,
   withWebMCPLaunchOptions,
   type WebMCPProbe,
@@ -143,5 +144,43 @@ describe("WebMCP runtime tool discovery", () => {
       available: false,
       names: [],
     });
+  });
+});
+
+describe("WebMCP renderer request policy", () => {
+  const origin = "https://www.awaytravel.com";
+
+  it("allows the audited Shopify WebMCP runtime scripts", () => {
+    expect(isWebMCPProbeRequestAllowed(
+      "https://cdn.shopify.com/storefront/webmcp/webmcp-0.1.1.js",
+      origin,
+      "Script",
+    )).toBe(true);
+    expect(isWebMCPProbeRequestAllowed(
+      "https://cdn.shopify.com/storefront/standard-actions.js",
+      origin,
+      "script",
+    )).toBe(true);
+    expect(isWebMCPProbeRequestAllowed(
+      "https://cdn.shopify.com/shopifycloud/storefront/assets/storefront/origin_trials-5059b83f.js",
+      origin,
+      "Script",
+    )).toBe(true);
+  });
+
+  it("continues to block arbitrary and private cross-origin requests", () => {
+    expect(isWebMCPProbeRequestAllowed("https://evil.example/tool.js", origin, "Script")).toBe(false);
+    expect(isWebMCPProbeRequestAllowed("http://169.254.169.254/latest/meta-data", origin, "Script")).toBe(false);
+    expect(isWebMCPProbeRequestAllowed("https://cdn.shopify.com/extensions/unrelated.js", origin, "Script")).toBe(false);
+    expect(isWebMCPProbeRequestAllowed(
+      "https://cdn.shopify.com/storefront/webmcp/webmcp-0.1.1.js",
+      origin,
+      "Fetch",
+    )).toBe(false);
+  });
+
+  it("allows all resources from the already validated target origin", () => {
+    expect(isWebMCPProbeRequestAllowed(`${origin}/assets/app.js`, origin, "Script")).toBe(true);
+    expect(isWebMCPProbeRequestAllowed(`${origin}/api/catalog`, origin, "Fetch")).toBe(true);
   });
 });
