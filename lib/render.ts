@@ -126,6 +126,26 @@ export function interpretRuntimeToolSnapshot(raw: unknown): {
   }
 }
 
+/** Read through the full bounded settle window. A non-empty registry is not
+ * necessarily complete: sites may register tools across multiple tasks or
+ * bundles. Returning the last queryable snapshot avoids saving the first
+ * partial batch as the final tool count. */
+export async function pollRuntimeToolRegistry(
+  readSnapshot: () => Promise<unknown>,
+  wait: (milliseconds: number) => Promise<void>,
+  attempts = 8,
+): Promise<{ available: boolean; names: string[] }> {
+  let latest = { available: false, names: [] as string[] };
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const current = interpretRuntimeToolSnapshot(
+      await readSnapshot().catch(() => undefined),
+    );
+    if (current.available) latest = current;
+    if (attempt < attempts - 1) await wait(500);
+  }
+  return latest;
+}
+
 function probeFailure(error: string, renderer?: WebMCPProbe["renderer"]): WebMCPProbe {
   return {
     ok: false,
@@ -429,14 +449,10 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
     // from a CDN). Poll the live registry for a bounded window instead of
     // taking a single early snapshot and permanently recording a false zero.
     await page.waitForTimeout(1_000);
-    let runtimeSnapshot = { available: false, names: [] as string[] };
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      runtimeSnapshot = interpretRuntimeToolSnapshot(
-        await page.evaluate(RUNTIME_TOOLS_SCRIPT).catch(() => undefined),
-      );
-      if (cdpTools.length > 0 || runtimeSnapshot.names.length > 0) break;
-      if (attempt < 7) await page.waitForTimeout(500);
-    }
+    const runtimeSnapshot = await pollRuntimeToolRegistry(
+      () => page.evaluate(RUNTIME_TOOLS_SCRIPT),
+      (milliseconds) => page.waitForTimeout(milliseconds),
+    );
     const raw = await page.evaluate(PROBE_SCRIPT);
     const html = await page.content();
     const probe = interpretProbe(raw, html, endpoint ? "playwright-remote" : "playwright");
