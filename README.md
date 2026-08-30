@@ -19,7 +19,7 @@ Outbound work is parallelised and individually bounded so a scan remains inside 
 
 ## Local development
 
-Node 22 or newer is required.
+Node 24 is required.
 
 ```sh
 nvm use

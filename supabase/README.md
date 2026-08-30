@@ -2,6 +2,8 @@
 
 The migrations are safe to adopt on the existing project and provide a complete baseline for clean environments. Apply them with the Supabase CLI after reviewing the target project.
 
+Local seed execution is deliberately disabled in `config.toml`: the benchmark corpus and its composition are private production data. `supabase db reset` recreates the complete schema from migrations without importing production records.
+
 Before applying `schedule_server_jobs_without_plaintext_secrets.sql` to a hosted project:
 
 1. Rotate the existing `CRON_SECRET`; an older scheduler definition stored it inline.
