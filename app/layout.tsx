@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Manrope } from "next/font/google";
 import { SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
 });
 
@@ -38,7 +43,7 @@ const JSON_LD = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable}`}>
       <body>
         <script
           type="application/ld+json"
@@ -46,31 +51,42 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         />
         <header className="site-header">
           <a href="/" className="wordmark">
-            Agent Surface Scan
+            <span className="wordmark-mark" aria-hidden="true"><span /></span>
+            <span>Agent Surface</span>
           </a>
-          <nav>
+          <nav aria-label="Primary navigation">
+            <a href="/about-scanner">How it works</a>
             <a href="/ladder">The Ladder</a>
-            <a href="/observatory">Observatory</a>
-            <a href="/case-study">Case study</a>
-            <a href="/make-callable">Make it callable</a>
-            <a href="/faq">FAQ</a>
-            <a href="/about-scanner">How we scan</a>
-            <a href="/#scan" className="button nav-scan">New scan</a>
+            <a href="/observatory">Benchmark</a>
+            <details className="nav-more">
+              <summary>More</summary>
+              <div>
+                <a href="/case-study">Case study</a>
+                <a href="/make-callable">Make it callable</a>
+                <a href="/faq">Questions</a>
+              </div>
+            </details>
+            <a href="/#scan" className="button nav-scan">Scan a site</a>
           </nav>
         </header>
         {children}
         <footer className="site-footer">
-          <p>
-            Rubric: Agent Surface Ladder v1.0 · by{" "}
+          <p className="footer-brand">Agent Surface Scan</p>
+          <p className="muted">
+            A free, evidence-based check of what AI agents can see and do on your website.
+          </p>
+          <nav aria-label="Footer navigation">
+            <a href="/ladder">The Ladder</a>
+            <a href="/about-scanner">How we scan</a>
+            <a href="/faq">Questions</a>
+            <a href="/opt-out">Opt out</a>
+            <a href="https://github.com/Niftyzio/scanwebmcp">Source</a>
+          </nav>
+          <p className="footer-credit">
+            Created by{" "}
             <a href="https://www.linkedin.com/in/sarasimeone/" rel="author">
               Sara Simeone
-            </a>{" "}
-            (Agentic Sara) · <a href="https://github.com/Niftyzio/scanwebmcp">Source (AGPL-3.0)</a> ·{" "}
-            <a href="/opt-out">Opt out</a>
-          </p>
-          <p className="muted">
-            This page registers WebMCP tools — open it in ChatGPT&apos;s desktop browser and ask it to
-            scan a site.
+            </a>
           </p>
         </footer>
       </body>

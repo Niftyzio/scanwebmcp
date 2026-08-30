@@ -47,15 +47,24 @@ const TEMPLATES: Template[] = [
     impact: 5,
     ease: 5,
     applies: (r) =>
-      ["robots_gptbot", "robots_claudebot", "robots_google_extended", "robots_perplexitybot"].some(
+      ["robots_oai_searchbot", "robots_claude_searchbot", "robots_perplexitybot", "robots_gptbot", "robots_claudebot", "robots_google_extended"].some(
         (k) => sig(r, k)?.valueText === "blocked",
       ),
-    title: () => "You are one file-edit away from being visible to AI agents",
+    title: () => "Your robots file restricts AI discovery or model use",
     text: (r) => {
-      const blocked = ["GPTBot", "ClaudeBot", "Google-Extended", "PerplexityBot"].filter(
-        (b) => sig(r, `robots_${b.toLowerCase().replace(/-/g, "_")}`)?.valueText === "blocked",
-      );
-      return `Your robots.txt currently tells ${blocked.join(", ")} not to read your site. These are the crawlers behind the AI assistants your future clients already ask for recommendations. Removing those directives is a five-minute change to one text file — and it moves you out of the Invisible rung immediately.`;
+      const names: Record<string, string> = {
+        OAI_SearchBot: "OAI-SearchBot (ChatGPT search)",
+        Claude_SearchBot: "Claude-SearchBot (Claude search)",
+        PerplexityBot: "PerplexityBot (search)",
+        GPTBot: "GPTBot (training)",
+        ClaudeBot: "ClaudeBot (training)",
+        Google_Extended: "Google-Extended (Gemini training/grounding control)",
+      };
+      const keys = ["OAI_SearchBot", "Claude_SearchBot", "PerplexityBot", "GPTBot", "ClaudeBot", "Google_Extended"];
+      const blocked = keys
+        .filter((key) => sig(r, `robots_${key.toLowerCase()}`)?.valueText === "blocked")
+        .map((key) => names[key]);
+      return `Your robots.txt currently blocks ${blocked.join(", ")}. Search crawlers affect whether content can surface in cited AI answers; training controls govern a different use. Review each directive against the outcome you want rather than treating every bot as the same visitor.`;
     },
   },
   {

@@ -13,6 +13,7 @@ import { DIMENSIONS, signalLabel, signalPlain, describeSignalValue } from "@/lib
 import { sectorNoun } from "@/lib/sectors";
 import { hasReportAccess, REPORT_ACCESS_COOKIE } from "@/lib/report-access";
 import { siteUrl } from "@/lib/site";
+import { recommendTools, type ToolRecommendation } from "@/lib/tool-recommendations";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,13 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
   const unlocked =
     !gateEnabled || hasReportAccess(cookieStore.get(REPORT_ACCESS_COOKIE)?.value, scan.slug);
   const rung: number = scan.rung ?? 0;
+  const toolRecommendations = recommendTools(signals.map((signal) => ({
+    signal_key: signal.signal_key,
+    value_bool: signal.value_bool,
+    value_num: signal.value_num == null ? null : Number(signal.value_num),
+    value_text: signal.value_text,
+    evidence_url: signal.evidence_url,
+  })));
   const scanData = {
     scanId: scan.id,
     domain,
@@ -84,6 +92,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
           ease: o.ease,
         }))
       : [],
+    suggestedTools: unlocked ? toolRecommendations : [],
     signals: unlocked
       ? signals.map((s) => ({
           dimension: s.dimension,
@@ -161,6 +170,10 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
 
       <AgentEyes domain={domain} signals={signals} />
 
+      <AgentAccessMatrix signals={signals} />
+
+      <ToolBlueprint domain={domain} tools={toolRecommendations} />
+
       <section aria-labelledby="evidence">
         <h2 id="evidence">What the agent saw</h2>
         <p className="muted small">
@@ -233,7 +246,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
           call. Ready to build? <a href="/make-callable">The implementation guide</a> has the
           copy-paste starting point.
         </p>
-        <PromptPack prompt={buildPrompt(domain, RUNGS[rung], scan.rubric_version, opportunities, slug)} />
+        <PromptPack prompt={buildPrompt(domain, RUNGS[rung], scan.rubric_version, opportunities, toolRecommendations, slug)} />
         <p style={{ marginTop: "1rem" }}>
           <RescanButton domain={domain} />
         </p>
@@ -243,6 +256,161 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         <ReportGate slug={scan.slug} />
       )}
     </main>
+  );
+}
+
+function AgentAccessMatrix({
+  signals,
+}: {
+  signals: { signal_key: string; value_text: string | null }[];
+}) {
+  const rows = [
+    { product: "ChatGPT", use: "Search discovery", key: "robots_oai_searchbot", token: "OAI-SearchBot" },
+    { product: "OpenAI", use: "Model training", key: "robots_gptbot", token: "GPTBot" },
+    { product: "Claude", use: "Search discovery", key: "robots_claude_searchbot", token: "Claude-SearchBot" },
+    { product: "Anthropic", use: "Model training", key: "robots_claudebot", token: "ClaudeBot" },
+    { product: "Gemini", use: "Training / grounding control", key: "robots_google_extended", token: "Google-Extended" },
+    { product: "Perplexity", use: "Search discovery", key: "robots_perplexitybot", token: "PerplexityBot" },
+  ];
+  const verdict = (key: string) => signals.find((signal) => signal.signal_key === key)?.value_text;
+
+  return (
+    <section className="agent-access" aria-labelledby="agent-access">
+      <p className="section-label">Published crawler policy</p>
+      <h2 id="agent-access">How this site treats AI search and model use</h2>
+      <p className="muted small">
+        These controls do different jobs. Search crawlers influence discovery and citations;
+        training controls govern reuse for models. User-triggered agent visits are a separate class
+        and are not reliably controlled by these robots.txt tokens.
+      </p>
+      <div className="access-table-wrap">
+        <table className="access-table">
+          <thead>
+            <tr><th>Product</th><th>Use</th><th>Robots token</th><th>Published treatment</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const value = verdict(row.key);
+              const label = value === "blocked" ? "Blocked"
+                : value === "allowed" ? "Explicitly allowed"
+                : value === "unmentioned" ? "Unmentioned — allowed by default"
+                : value === "no_robots_txt" ? "No robots.txt restriction"
+                : "Not measured in this scan";
+              return (
+                <tr key={row.key}>
+                  <td><strong>{row.product}</strong></td>
+                  <td>{row.use}</td>
+                  <td><code>{row.token}</code></td>
+                  <td><span className={`access-status ${value === "blocked" ? "is-blocked" : value ? "is-open" : "is-unmeasured"}`}>{label}</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {rows.some((row) => verdict(row.key) == null) && (
+        <p className="muted small access-rescan-note">Older scan: re-scan this site to add the latest dedicated AI-search crawler checks.</p>
+      )}
+    </section>
+  );
+}
+
+function ToolBlueprint({ domain, tools }: { domain: string; tools: ToolRecommendation[] }) {
+  const subject = encodeURIComponent(`Agent tool opportunities for ${domain}`);
+  return (
+    <section className="tool-blueprint" aria-labelledby="tool-blueprint">
+      <p className="section-label">Agent capability blueprint</p>
+      <h2 id="tool-blueprint">Tools this site could expose to agents</h2>
+      <p className="muted tool-blueprint-lede">
+        These are deterministic recommendations from observed site capabilities—not invented by an
+        LLM. This report reveals up to two strong starting points; a deeper capability workshop can
+        map the rest.
+      </p>
+
+      {tools.length > 0 ? (
+        <>
+          <div className="tool-card-grid">
+            {tools.map((tool, index) => (
+              <article className="tool-card" key={tool.name}>
+                <div className="tool-card-head">
+                  <span className="tool-rank">0{index + 1}</span>
+                  <div>
+                    <code>{tool.name}</code>
+                    <h3>{tool.label}</h3>
+                  </div>
+                </div>
+                <p>{tool.description}</p>
+                <dl className="tool-spec">
+                  <div><dt>Inputs</dt><dd>{tool.inputs.join(" · ")}</dd></div>
+                  <div><dt>Returns</dt><dd>{tool.output}</dd></div>
+                  <div><dt>Human control</dt><dd>{tool.confirmation}</dd></div>
+                </dl>
+                <p className="tool-evidence">
+                  <strong>Why we propose it:</strong> {tool.evidence}{" "}
+                  <a href={`#evidence-${tool.evidenceSignalKey}`}>See scan evidence ↓</a>
+                </p>
+                <div className="tool-meta" aria-label={`Business value ${tool.businessValue} out of 5; effort ${tool.effort} out of 5; confidence ${tool.confidence}`}>
+                  <span>Value {tool.businessValue}/5</span>
+                  <span>Effort {tool.effort}/5</span>
+                  <span>{tool.confidence} confidence</span>
+                </div>
+              </article>
+            ))}
+          </div>
+          <ToolOpportunityMap tools={tools} />
+        </>
+      ) : (
+        <p className="tool-empty">
+          This scan did not reach enough public capability evidence to make a responsible tool
+          recommendation. A deeper review can map workflows the public site does not expose.
+        </p>
+      )}
+
+      <div className="tool-more">
+        <div>
+          <strong>There are likely more capabilities behind the public pages.</strong>
+          <p>We can turn your forms, systems and buyer journeys into a complete agent-tool roadmap.</p>
+        </div>
+        <a className="button" href={`mailto:sara@nocodelab.ai?subject=${subject}`}>
+          Discover more tools
+        </a>
+      </div>
+    </section>
+  );
+}
+
+function ToolOpportunityMap({ tools }: { tools: ToolRecommendation[] }) {
+  return (
+    <figure className="tool-map">
+      <figcaption>
+        <strong>Agent Opportunity Map</strong>
+        <span>Start high and left: higher business value, lower implementation effort.</span>
+      </figcaption>
+      <div className="tool-map-plot" role="img" aria-label={tools.map((tool, index) =>
+        `${index + 1}: ${tool.name}, business value ${tool.businessValue} out of 5, effort ${tool.effort} out of 5`,
+      ).join(". ")}>
+        <span className="map-axis map-axis-y">Higher value</span>
+        <span className="map-axis map-axis-x">More effort</span>
+        <span className="map-quadrant">Best first</span>
+        {tools.map((tool, index) => (
+          <span
+            aria-hidden="true"
+            className={`tool-bubble confidence-${tool.confidence.toLowerCase()}`}
+            key={tool.name}
+            style={{
+              left: `${12 + ((tool.effort - 1) / 4) * 76}%`,
+              top: `${10 + ((5 - tool.businessValue) / 4) * 72}%`,
+            }}
+            title={tool.name}
+          >
+            {index + 1}
+          </span>
+        ))}
+      </div>
+      <ol className="tool-map-key">
+        {tools.map((tool) => <li key={tool.name}><code>{tool.name}</code></li>)}
+      </ol>
+    </figure>
   );
 }
 
@@ -419,12 +587,16 @@ function buildPrompt(
   rungName: string,
   rubricVersion: string,
   opportunities: { rank: number; rendered_text: string }[],
+  tools: ToolRecommendation[],
   slug: string,
 ): string {
   return `My website ${domain} was scanned with the Agent Surface Scan (Agent Surface Ladder v${rubricVersion}, by Sara Simeone / Agentic Sara). Verdict: ${rungName} on the ladder Invisible → Readable → Answerable → Callable → Transactable.
 
 The scanner's key findings, and the openings they point to:
 ${opportunities.map((o) => `${o.rank}. ${o.rendered_text.replace(/\*\*/g, "")}`).join("\n")}
+
+The scanner's two strongest evidence-backed tool recommendations:
+${tools.map((tool, index) => `${index + 1}. ${tool.name}: ${tool.description} Inputs: ${tool.inputs.join(", ")}. Returns: ${tool.output}. ${tool.confirmation}.`).join("\n") || "No responsible tool recommendation was possible from the public evidence in this scan."}
 
 Act as my implementation partner. For each finding: tell me exactly what to change on my site, in what order, and draft the artefacts (robots.txt lines, an llms.txt, schema.org markup, a WebMCP registerTool implementation for my main form). Explain each in plain language first.
 

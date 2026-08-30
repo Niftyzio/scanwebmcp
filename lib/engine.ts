@@ -58,7 +58,21 @@ export interface ScanResult {
   countryGuess: string | null;
 }
 
-const AI_BOTS = ["GPTBot", "ClaudeBot", "Google-Extended", "PerplexityBot"] as const;
+// Report search/indexing controls separately from model-training controls.
+// User-triggered fetchers are deliberately excluded: vendors document that
+// they may not follow robots.txt in the same way as indexing crawlers.
+const AI_CRAWLERS = [
+  "OAI-SearchBot",
+  "GPTBot",
+  "Claude-SearchBot",
+  "ClaudeBot",
+  "Google-Extended",
+  "PerplexityBot",
+] as const;
+
+// The published v1.0 rubric scores these four controls. Keep this stable until
+// a new rubric version is released so historical benchmarks do not move.
+const RUBRIC_AI_BOTS = ["GPTBot", "ClaudeBot", "Google-Extended", "PerplexityBot"] as const;
 
 // ---------------------------------------------------------------------------
 // Fetch helpers
@@ -248,7 +262,7 @@ async function checkD1(origin: string, signals: Signal[], errors: string[]) {
   const robots = await politeFetch(`${origin}/robots.txt`);
   const robotsIsText = robots.ok && !looksLikeHtml(robots.body);
   const robotsPolicy = robotsIsText ? parseRobots(robots.body) : ALLOW_ALL_ROBOTS;
-  for (const bot of AI_BOTS) {
+  for (const bot of AI_CRAWLERS) {
     signals.push({
       dimension: "D1",
       signalKey: `robots_${bot.toLowerCase().replace(/-/g, "_")}`,
@@ -468,6 +482,90 @@ export function discoverPages(origin: string, homepageHtml: string): Map<string,
 // D2 · Answerability + D4 · Transactability signals over the page set
 // ---------------------------------------------------------------------------
 
+export interface DetectedFormCapability {
+  purpose: "appointment" | "checkout" | "application" | "quote" | "contact" | "search" | "newsletter" | "account" | "other";
+  sourceUrl: string;
+  method: "get" | "post";
+  action: string | null;
+  provider: string | null;
+  submitLabel: string | null;
+  fields: { name: string; type: string; required: boolean }[];
+}
+
+function attributeValue(attributes: string, name: string): string | null {
+  const match = attributes.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:["']([^"']*)["']|([^\\s>]+))`, "i"));
+  return (match?.[1] ?? match?.[2] ?? null)?.trim() || null;
+}
+
+function hasAttribute(attributes: string, name: string): boolean {
+  return new RegExp(`(?:^|\\s)${name}(?:\\s|=|$)`, "i").test(attributes);
+}
+
+function formPurpose(haystack: string): DetectedFormCapability["purpose"] {
+  if (/book|appointment|schedule|calendar|consultation|meeting/.test(haystack)) return "appointment";
+  if (/checkout|cart|payment|purchase|buy[-_\s]?now|order/.test(haystack)) return "checkout";
+  if (/apply|application|register|enrol|enroll|admission/.test(haystack)) return "application";
+  if (/quote|estimate|proposal|pricing[-_\s]?request/.test(haystack)) return "quote";
+  if (/contact|enquir|inquir|message|support|request[-_\s]?call/.test(haystack)) return "contact";
+  if (/search|query/.test(haystack)) return "search";
+  if (/newsletter|subscribe|mailing[-_\s]?list|updates/.test(haystack)) return "newsletter";
+  if (/login|log[-_\s]?in|sign[-_\s]?in|password|account/.test(haystack)) return "account";
+  return "other";
+}
+
+/** Extract a privacy-safe capability inventory from public forms. Values and
+ * hidden fields are never retained; duplicate forms repeated in a site footer
+ * collapse to one capability. */
+export function extractFormCapabilities(
+  pages: { url: string; html: string }[],
+): DetectedFormCapability[] {
+  const unique = new Map<string, DetectedFormCapability>();
+  for (const page of pages) {
+    for (const match of page.html.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form\s*>/gi)) {
+      const attributes = match[1];
+      const body = match[2];
+      const fields = [...body.matchAll(/<(input|select|textarea)\b([^>]*)>/gi)]
+        .flatMap((field) => {
+          const attrs = field[2];
+          const type = (attributeValue(attrs, "type") ?? field[1]).toLowerCase();
+          if (["hidden", "submit", "button", "reset", "image"].includes(type)) return [];
+          const name = attributeValue(attrs, "name") ?? attributeValue(attrs, "id") ?? type;
+          return [{ name: snippet(name.toLowerCase().replace(/[^a-z0-9_-]+/g, "_"), 60), type, required: hasAttribute(attrs, "required") }];
+        })
+        .filter((field, index, all) => all.findIndex((other) => other.name === field.name && other.type === field.type) === index)
+        .slice(0, 12);
+      const submitMatch = body.match(/<button\b[^>]*>([\s\S]*?)<\/button\s*>/i)
+        ?? body.match(/<input\b[^>]*type=["']?submit["']?[^>]*value=["']([^"']+)["'][^>]*>/i);
+      const submitLabel = submitMatch ? snippet(htmlToVisibleText(submitMatch[1]), 80) || null : null;
+      const actionRaw = attributeValue(attributes, "action");
+      let action: string | null = null;
+      if (actionRaw && !/^javascript:/i.test(actionRaw)) {
+        try { action = new URL(actionRaw, page.url).toString(); } catch { action = actionRaw; }
+      }
+      const context = [attributes, actionRaw, submitLabel, ...fields.map((field) => field.name), htmlToVisibleText(body).slice(0, 240)]
+        .filter(Boolean).join(" ").toLowerCase();
+      const provider = /hubspot/i.test(context) ? "HubSpot"
+        : /salesforce|webtolead/i.test(context) ? "Salesforce"
+        : /mailchimp/i.test(context) ? "Mailchimp"
+        : /marketo/i.test(context) ? "Marketo"
+        : /typeform/i.test(context) ? "Typeform"
+        : null;
+      const capability: DetectedFormCapability = {
+        purpose: formPurpose(context),
+        sourceUrl: page.url,
+        method: attributeValue(attributes, "method")?.toLowerCase() === "get" ? "get" : "post",
+        action,
+        provider,
+        submitLabel,
+        fields,
+      };
+      const signature = `${capability.purpose}|${fields.map((field) => `${field.name}:${field.type}`).sort().join(",")}|${submitLabel?.toLowerCase() ?? ""}`;
+      if (!unique.has(signature)) unique.set(signature, capability);
+    }
+  }
+  return [...unique.values()];
+}
+
 async function checkPageSet(
   origin: string,
   homepageHtml: string,
@@ -491,6 +589,7 @@ async function checkPageSet(
   }
 
   let combinedHtml = homepageHtml;
+  const pageDocuments = [{ url: `${origin}/`, html: homepageHtml }];
   const fetchedPages = await Promise.all(
     [...pages].map(async ([type, url]) => ({ type, url, response: await policyFetch(url, robotsPolicy) })),
   );
@@ -498,6 +597,7 @@ async function checkPageSet(
     if (!r.ok) continue;
     scanned.push(url);
     combinedHtml += "\n" + r.body;
+    pageDocuments.push({ url, html: r.body });
 
     if (type === "pricing") {
       const priceSpecific =
@@ -538,6 +638,21 @@ async function checkPageSet(
     signalKey: "forms_as_latent_tools",
     valueNum: forms,
     evidenceUrl: `${origin}/`,
+    observedAt: now(),
+  });
+
+  const formCapabilities = extractFormCapabilities(pageDocuments);
+  signals.push({
+    dimension: "D3",
+    signalKey: "detected_form_capabilities",
+    valueNum: formCapabilities.length,
+    valueText: JSON.stringify(formCapabilities.slice(0, 10)),
+    evidenceUrl: formCapabilities[0]?.sourceUrl ?? `${origin}/`,
+    evidenceSnippet: formCapabilities.length > 0
+      ? snippet(formCapabilities.map((capability) =>
+          `${capability.purpose}: ${capability.fields.map((field) => field.name).join(", ") || "no named fields"}`,
+        ).join(" | "))
+      : undefined,
     observedAt: now(),
   });
 
@@ -970,7 +1085,7 @@ export const REFERENCE_SCORING: ScoringConfig = {
 export function score(signals: Signal[], cfg: ScoringConfig = REFERENCE_SCORING) {
   // D1 (0-100)
   let d1 = 0;
-  const blockedBots = AI_BOTS.filter(
+  const blockedBots = RUBRIC_AI_BOTS.filter(
     (b) => sig(signals, `robots_${b.toLowerCase().replace(/-/g, "_")}`)?.valueText === "blocked",
   ).length;
   d1 += blockedBots === 0 ? 25 : blockedBots >= 3 ? 0 : 10;
