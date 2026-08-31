@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Manrope } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
 import { SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
 
@@ -70,6 +71,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </nav>
         </header>
         {children}
+        <Analytics />
         <footer className="site-footer">
           <p className="footer-brand">Agent Surface Scan</p>
           <p className="muted">

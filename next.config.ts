@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
-  "connect-src 'self'",
+  "connect-src 'self' https://vitals.vercel-insights.com",
   "font-src 'self' data:",
   "form-action 'self'",
   "frame-ancestors 'none'",
