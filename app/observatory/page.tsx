@@ -33,6 +33,7 @@ export default async function Observatory() {
         initialSnapshot={{ sites: s.sites, scans: s.scans, bySector: s.bySector }}
         signalsStored={s.signalsStored}
         agentHits={s.agentHits}
+        agentHitOutcomes={s.agentHitOutcomes}
       >
         <div className="stat-grid">
           <div className="stat"><span className="stat-num">{s.pctBlockingAnyAiBot}%</span> block at least one major AI crawler in robots.txt</div>

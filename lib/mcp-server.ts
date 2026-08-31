@@ -23,7 +23,7 @@ const TOOLS = [
   {
     name: "scan_agent_surface",
     description:
-      "Run an Agent Surface Scan of a website: its public rung and dimension scores on the Agent Surface Ladder. The full evidenced findings are available by email after the human opts in. Takes 10–40 seconds.",
+      "Run an Agent Surface Scan of a website and return its public rung and scores. In a scan-and-email request, call this first and email_report only after it succeeds. Takes 10–40 seconds.",
     inputSchema: {
       type: "object",
       properties: { url: { type: "string", description: "Website to scan, e.g. example.com" } },
@@ -40,12 +40,12 @@ const TOOLS = [
     description:
       "Send the full evidenced Agent Surface Scan report for an already-scanned website to an email address. " +
       "CONSEQUENTIAL — sends one transactional report. Optional benchmark updates require a separate boolean opt-in and email confirmation. " +
-      "Only call it with an email address the human explicitly gave and confirmed for this purpose in the current conversation. Never guess, look up, or auto-fill an address.",
+      "A direct request to send this report to an address the human supplied is sufficient confirmation for the transactional email. Never guess, look up, or auto-fill an address.",
     inputSchema: {
       type: "object",
       properties: {
         url: { type: "string", description: "The scanned website, e.g. example.com" },
-        email: { type: "string", description: "The email address the human explicitly provided and confirmed." },
+        email: { type: "string", description: "The address the human directly requested for this report." },
         benchmark_updates: { type: "boolean", description: "True only if the human separately opted into occasional benchmark updates. Defaults to false." },
       },
       required: ["url", "email"],
@@ -81,7 +81,7 @@ async function callTool(
           `Scores /100 — legibility ${scan.d1}, answerability ${scan.d2}, callability ${scan.d3}, transactability ${scan.d4}, standing ${scan.d5}. ` +
           `Public result: ${siteUrl(`/scan/${r.slug}`)}. ` +
           `The full findings, timestamped evidence, and ranked recommendations are email-gated. ` +
-          `NEXT STEP FOR THE ASSISTANT: ask the human whether they would like the full report emailed to them. If they say yes, ask which email address to use, then call email_report. Do not guess an address or call email_report without an address explicitly provided for this report.`,
+          `NEXT STEP FOR THE ASSISTANT: if the human already asked for delivery and supplied an email address, call email_report next; that direct request is sufficient confirmation for the transactional report. Otherwise ask whether they want it emailed and which address to use. Never guess an address.`,
       );
     }
     if (name === "get_ladder_definition") {
@@ -121,7 +121,7 @@ async function callTool(
       const s = await getObservatoryStats();
       await logAgentHit({ toolName: name, argumentsJson: args, agentUa: ua ?? undefined, outcome: "ok", ipHash });
       return text(
-        `Corpus: ${s.sites} sites, ${s.scans} scans, ${s.signalsStored} signals. ` +
+        `Corpus: ${s.sites} sites, ${s.scans} scans, ${s.signalsStored} signals and ${s.agentHits} tool invocations (${s.agentHitOutcomes.ok} completed, ${s.agentHitOutcomes.refused} refused, ${s.agentHitOutcomes.error} errors). ` +
           `${s.pctBlockingAnyAiBot}% block an AI crawler in robots.txt; ${s.pctWafBlocked}% wall agents out at the firewall; ` +
           `${s.pctLlmsTxt}% publish llms.txt; ${s.pctSellsMarkup}% have machine-readable offering markup; ` +
           `${s.pctAnyCallable}% expose anything callable; ${s.totalLatentForms} latent forms found. ` +

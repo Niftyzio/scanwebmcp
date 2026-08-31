@@ -144,6 +144,7 @@ export interface ObservatoryStats {
   pctAnyCallable: number;
   totalLatentForms: number;
   agentHits: number;
+  agentHitOutcomes: { ok: number; refused: number; error: number };
 }
 
 export interface CorpusCounts {
@@ -251,16 +252,32 @@ export async function getObservatorySnapshot(): Promise<ObservatorySnapshot> {
 
 export async function getObservatoryStats(): Promise<ObservatoryStats> {
   const supabase = db();
-  const [corpusCounts, scanSummary, ...countResults] = await Promise.all([
+  const [
+    corpusCounts,
+    scanSummary,
+    signalsResult,
+    agentHitsResult,
+    agentHitsOkResult,
+    agentHitsRefusedResult,
+    agentHitsErrorResult,
+  ] = await Promise.all([
     getCorpusCounts(),
     loadLatestCompletedScanSummary(),
     supabase.from("signals").select("*", { count: "exact", head: true }),
     supabase.from("agent_hits").select("*", { count: "exact", head: true }),
+    supabase.from("agent_hits").select("*", { count: "exact", head: true }).eq("outcome", "ok"),
+    supabase.from("agent_hits").select("*", { count: "exact", head: true }).eq("outcome", "refused"),
+    supabase.from("agent_hits").select("*", { count: "exact", head: true }).eq("outcome", "error"),
   ]);
-  for (const result of countResults) {
+  for (const result of [
+    signalsResult,
+    agentHitsResult,
+    agentHitsOkResult,
+    agentHitsRefusedResult,
+    agentHitsErrorResult,
+  ]) {
     if (result.error) throw new Error(`Could not load observatory totals: ${result.error.message}`);
   }
-  const [{ count: signalsStored }, { count: agentHits }] = countResults;
 
   const { scanIds, rungDist, bySector } = scanSummary;
 
@@ -297,7 +314,7 @@ export async function getObservatoryStats(): Promise<ObservatoryStats> {
   return {
     sites: corpusCounts.sites,
     scans: corpusCounts.scans,
-    signalsStored: signalsStored ?? 0,
+    signalsStored: signalsResult.count ?? 0,
     rungDist,
     bySector,
     pctBlockingAnyAiBot: pc(blockingAny),
@@ -306,6 +323,11 @@ export async function getObservatoryStats(): Promise<ObservatoryStats> {
     pctSellsMarkup: pc(sells),
     pctAnyCallable: pc(callable),
     totalLatentForms: forms,
-    agentHits: agentHits ?? 0,
+    agentHits: agentHitsResult.count ?? 0,
+    agentHitOutcomes: {
+      ok: agentHitsOkResult.count ?? 0,
+      refused: agentHitsRefusedResult.count ?? 0,
+      error: agentHitsErrorResult.count ?? 0,
+    },
   };
 }
