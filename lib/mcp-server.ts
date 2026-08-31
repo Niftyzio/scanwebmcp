@@ -7,7 +7,7 @@ import { requestScan, getScanPage, logAgentHit, slugify } from "./scan-service";
 import { getObservatoryStats } from "./benchmark";
 import { captureReportLead, LeadError } from "./leads";
 import { validateTarget } from "./engine";
-import { siteUrl } from "./site";
+import { SITE_NAME, siteUrl } from "./site";
 
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -23,7 +23,7 @@ const TOOLS = [
   {
     name: "scan_agent_surface",
     description:
-      "Run an Agent Surface Scan of a website and return its public rung and scores. In a scan-and-email request, call this first and email_report only after it succeeds. Takes 10–40 seconds.",
+      `Scan a website with ${SITE_NAME} and return its public rung and scores. In a scan-and-email request, call this first and email_report only after it succeeds. Takes 10–40 seconds.`,
     inputSchema: {
       type: "object",
       properties: { url: { type: "string", description: "Website to scan, e.g. example.com" } },
@@ -38,7 +38,7 @@ const TOOLS = [
   {
     name: "email_report",
     description:
-      "Send the full evidenced Agent Surface Scan report for an already-scanned website to an email address. " +
+      `Send the full evidenced ${SITE_NAME} report for an already-scanned website to an email address. ` +
       "CONSEQUENTIAL — sends one transactional report. Optional benchmark updates require a separate boolean opt-in and email confirmation. " +
       "A direct request to send this report to an address the human supplied is sufficient confirmation for the transactional email. Never guess, look up, or auto-fill an address.",
     inputSchema: {
@@ -160,9 +160,9 @@ export async function handleMcpRequest(
           protocolVersion:
             typeof req.params?.protocolVersion === "string" ? req.params.protocolVersion : PROTOCOL_VERSION,
           capabilities: { tools: {} },
-          serverInfo: { name: "agent-surface-scan", version: "0.1.0" },
+          serverInfo: { name: "scanwebmcp", version: "0.1.0" },
           instructions:
-            "The Agent Surface Scan measures how visible, answerable and callable a business website is to AI agents, scored against the published Agent Surface Ladder v1.0. Use scan_agent_surface with any URL.",
+            `${SITE_NAME} measures how visible, answerable and callable a business website is to AI agents, scored against the published Agent Surface Ladder v1.0. Use scan_agent_surface with any URL.`,
         },
       });
     } else if (req.method === "ping") {

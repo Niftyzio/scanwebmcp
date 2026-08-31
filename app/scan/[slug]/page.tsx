@@ -133,7 +133,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         verdict={RUNG_PLAIN[rung]}
       />
 
-      <p className="kicker">Agent Surface Scan · {scannedAt} · rubric v{scan.rubric_version}</p>
+      <p className="kicker">ScanWebMCP.com · {scannedAt} · rubric v{scan.rubric_version}</p>
 
       <header className="verdict-panel">
         <div className="score-big" aria-label={`Agent Surface Score: ${scan.composite ?? "not scored"} out of 100`}>
@@ -771,7 +771,7 @@ function buildPrompt(
   tools: ToolRecommendation[],
   slug: string,
 ): string {
-  return `My website ${domain} was scanned with the Agent Surface Scan (Agent Surface Ladder v${rubricVersion}, by Sara Simeone / Agentic Sara). Verdict: ${rungName} on the ladder Invisible → Readable → Answerable → Callable → Transactable.
+  return `My website ${domain} was scanned with ScanWebMCP.com (Agent Surface Ladder v${rubricVersion}, by Sara Simeone / Agentic Sara). Verdict: ${rungName} on the ladder Invisible → Readable → Answerable → Callable → Transactable.
 
 The scanner's key findings, and the openings they point to:
 ${opportunities.map((o) => `${o.rank}. ${o.rendered_text.replace(/\*\*/g, "")}`).join("\n")}

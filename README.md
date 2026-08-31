@@ -1,4 +1,4 @@
-# Agent Surface Scan
+# ScanWebMCP.com
 
 Enter a URL and get a dated, evidenced answer to: **which of this business's capabilities can an AI agent call today?**
 

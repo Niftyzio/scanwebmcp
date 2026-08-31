@@ -6,7 +6,7 @@ const ReportPreview = memo(function ReportPreview({ domain, score }: { domain: s
   return <div className="report-preview" aria-hidden="true">
     <div className="preview-report-head">
       <div>
-        <span>Agent Surface Report · {domain}</span>
+        <span>ScanWebMCP.com Report · {domain}</span>
         <strong>Full evidence and recommendations</strong>
       </div>
       <b>{score ?? "–"}<span>/100</span></b>

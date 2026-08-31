@@ -134,7 +134,7 @@ export default function LadderPage() {
         the version it was scored against.
       </p>
       <p className="muted">
-        The first implementation of this rubric is the <a href="/">Agent Surface Scan</a> — which is
+        The first implementation of this rubric is <a href="/">ScanWebMCP.com</a> — which is
         itself agent-callable, because a rubric about callability that an agent cannot call would be
         embarrassing.
       </p>

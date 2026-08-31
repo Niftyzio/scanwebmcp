@@ -4,7 +4,7 @@ import WebMCPTools from "@/components/WebMCPTools";
 export const metadata: Metadata = {
   title: "Case study: Invisible to Callable in one night",
   description:
-    "The Agent Surface Scan scanned itself, scored rung 0, and climbed its own ladder to Callable — every step evidenced on a public, dated scan page.",
+    "ScanWebMCP.com scanned itself, scored rung 0, and climbed the Agent Surface Ladder to Callable — every step evidenced on a public, dated scan page.",
 };
 
 export default function CaseStudy() {

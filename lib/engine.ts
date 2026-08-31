@@ -1,5 +1,5 @@
 /**
- * Agent Surface Scan — v0 signal engine.
+ * ScanWebMCP.com — v0 signal engine.
  *
  * Plain-HTTP signals only (no headless rendering in v0). Every probe stores a
  * VALIDATED verdict, never a bare status code: a 200 that serves a login page

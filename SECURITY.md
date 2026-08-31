@@ -2,11 +2,11 @@
 
 ## Supported version
 
-Security fixes are applied to the current `main` branch and the production deployment at <https://scanwebmcp.vercel.app>.
+Security fixes are applied to the current `main` branch and the production deployment at <https://www.scanwebmcp.com>.
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a suspected vulnerability. Email `sara@nocodelab.ai` with the subject `Security report: Agent Surface Scan` and include:
+Do not open a public issue for a suspected vulnerability. Email `sara@nocodelab.ai` with the subject `Security report: ScanWebMCP.com` and include:
 
 - the affected route, component or commit;
 - the impact and conditions required to reproduce it;

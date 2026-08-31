@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "Agent Surface Scan WebMCP evals",
+  "name": "ScanWebMCP.com WebMCP evals",
   "guidance": "https://developer.chrome.com/docs/ai/webmcp/evals",
   "fixtures": {
     "domain": "example.com",
