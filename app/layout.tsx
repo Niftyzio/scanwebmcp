@@ -20,26 +20,70 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: SITE_NAME,
+  metadataBase: new URL(SITE_ORIGIN),
+  applicationName: SITE_NAME,
+  title: { default: SITE_NAME, template: `%s | ${SITE_NAME}` },
   description:
     "Which of your business capabilities could an AI agent call today? A free, evidenced scan against the Agent Surface Ladder.",
+  authors: [{ name: "Sara Simeone", url: "https://www.linkedin.com/in/sarasimeone/" }],
+  creator: "Sara Simeone",
+  publisher: SITE_NAME,
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: "See what AI agents can read, answer, and call on any public website.",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: `${SITE_NAME} — see what AI agents can read, answer, and call.` }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: "See what AI agents can read, answer, and call on any public website.",
+    images: ["/og.png"],
+  },
 };
 
 const JSON_LD = {
   "@context": "https://schema.org",
-  "@type": "WebApplication",
-  name: SITE_NAME,
-  url: SITE_ORIGIN,
-  applicationCategory: "BusinessApplication",
-  description:
-    "Enter a URL and get a live, evidenced answer to which of a business's capabilities an AI agent could call today, scored against the Agent Surface Ladder v1.0.",
-  offers: { "@type": "Offer", price: "0", priceCurrency: "GBP" },
-  author: {
-    "@type": "Person",
-    name: "Sara Simeone",
-    alternateName: "Agentic Sara",
-    url: "https://www.linkedin.com/in/sarasimeone/",
-  },
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "@id": `${SITE_ORIGIN}/#application`,
+      name: SITE_NAME,
+      url: SITE_ORIGIN,
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      description:
+        "Enter a URL and get a live, evidenced answer to which of a business's capabilities an AI agent could call today, scored against the Agent Surface Ladder v1.0.",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "GBP" },
+      author: { "@id": `${SITE_ORIGIN}/#creator` },
+      sameAs: [
+        "https://github.com/Niftyzio/scanwebmcp",
+        "https://www.linkedin.com/in/sarasimeone/",
+      ],
+    },
+    {
+      "@type": "Service",
+      "@id": `${SITE_ORIGIN}/#service`,
+      name: "Website agent-readiness scanning",
+      serviceType: "AI agent-readiness assessment",
+      provider: { "@id": `${SITE_ORIGIN}/#creator` },
+      areaServed: "Worldwide",
+      availableChannel: {
+        "@type": "ServiceChannel",
+        serviceUrl: SITE_ORIGIN,
+      },
+    },
+    {
+      "@type": "Person",
+      "@id": `${SITE_ORIGIN}/#creator`,
+      name: "Sara Simeone",
+      alternateName: "Agentic Sara",
+      url: "https://www.linkedin.com/in/sarasimeone/",
+      sameAs: ["https://www.linkedin.com/in/sarasimeone/"],
+    },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -64,6 +108,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <div>
                 <a href="/case-study">Case study</a>
                 <a href="/make-callable">Make it callable</a>
+                <a href="/developers">Developers</a>
                 <a href="/faq">Questions</a>
               </div>
             </details>
@@ -80,7 +125,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <nav aria-label="Footer navigation">
             <a href="/ladder">The Ladder</a>
             <a href="/about-scanner">How we scan</a>
+            <a href="/developers">Developers</a>
             <a href="/faq">Questions</a>
+            <a href="/contact">Contact</a>
+            <a href="/privacy">Privacy</a>
             <a href="/opt-out">Opt out</a>
             <a href="https://github.com/Niftyzio/scanwebmcp">Source</a>
           </nav>

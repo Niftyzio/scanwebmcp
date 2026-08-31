@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getObservatorySnapshot } from "@/lib/benchmark";
+import { apiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,9 +19,12 @@ export async function GET() {
     console.error("observatory_snapshot_failed", {
       message: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: "Live Observatory data is temporarily unavailable." },
-      { status: 503, headers: { "Cache-Control": "no-store" } },
+    return apiError(
+      "OBSERVATORY_UNAVAILABLE",
+      "Live Observatory data is temporarily unavailable.",
+      "Retry shortly or use the last rendered Observatory page.",
+      503,
+      { "Cache-Control": "no-store", "Retry-After": "60" },
     );
   }
 }

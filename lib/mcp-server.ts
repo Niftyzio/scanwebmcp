@@ -29,11 +29,13 @@ const TOOLS = [
       properties: { url: { type: "string", description: "Website to scan, e.g. example.com" } },
       required: ["url"],
     },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
     name: "get_ladder_definition",
     description: "The published Agent Surface Ladder v1.0 rubric — rungs, definitions, and scoring weights.",
     inputSchema: { type: "object", properties: { rung: { type: "number", description: "Optional rung 0-4" } } },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
     name: "email_report",
@@ -57,10 +59,16 @@ const TOOLS = [
     description:
       "Live aggregate findings from the scan corpus: what share of scanned businesses block AI crawlers, publish llms.txt, expose anything callable, and the rung distribution overall and by sector.",
     inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   },
 ];
 
 const text = (t: string) => ({ content: [{ type: "text", text: t }] });
+const toolError = (code: string, message: string) => ({
+  ...text(message),
+  structuredContent: { error: { code, message } },
+  isError: true,
+});
 
 async function callTool(
   name: string,
@@ -112,7 +120,10 @@ async function callTool(
       } catch (e) {
         if (e instanceof LeadError) {
           await logAgentHit({ toolName: name, argumentsJson: { url: args.url }, agentUa: ua ?? undefined, outcome: "refused", ipHash }).catch(() => {});
-          return { ...text(`Report not sent: ${e.message}${e.status === 404 ? " Run scan_agent_surface first." : ""}`), isError: true };
+          return toolError(
+            e.status === 404 ? "SCAN_REQUIRED" : "REPORT_NOT_SENT",
+            `Report not sent: ${e.message}${e.status === 404 ? " Run scan_agent_surface first." : ""}`,
+          );
         }
         throw e;
       }
@@ -129,10 +140,10 @@ async function callTool(
           `Live view: ${siteUrl("/observatory")}`,
       );
     }
-    return { ...text(`Unknown tool: ${name}`), isError: true };
+    return toolError("UNKNOWN_TOOL", `Unknown tool: ${name}`);
   } catch (e) {
     await logAgentHit({ toolName: name, argumentsJson: name === "email_report" ? { url: args.url } : args, agentUa: ua ?? undefined, outcome: "error", ipHash }).catch(() => {});
-    return { ...text(`Tool error: ${e instanceof Error ? e.message : String(e)}`), isError: true };
+    return toolError("TOOL_EXECUTION_ERROR", `Tool error: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 

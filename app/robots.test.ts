@@ -1,9 +1,9 @@
-import type { MetadataRoute } from "next";
-import { siteUrl } from "../lib/site";
+import { describe, expect, it } from "vitest";
+import robots from "./robots";
 
-export default function robots(): MetadataRoute.Robots {
-  return {
-    rules: [
+describe("robots.txt AI crawler policy", () => {
+  it("preserves the selected crawler allow and block rules", () => {
+    expect(robots().rules).toEqual([
       { userAgent: "OAI-SearchBot", allow: "/" },
       { userAgent: "Claude-SearchBot", allow: "/" },
       { userAgent: ["PerplexityBot", "Perplexity-User"], allow: "/" },
@@ -16,7 +16,6 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
         other: { "Content-Signal": "search=yes, ai-train=no" },
       },
-    ],
-    sitemap: siteUrl("/sitemap.xml"),
-  };
-}
+    ]);
+  });
+});

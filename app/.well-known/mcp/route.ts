@@ -13,6 +13,14 @@ export function GET() {
         endpoint: siteUrl("/mcp"),
         authentication: "none",
       },
+      {
+        name: "scanwebmcp-docs",
+        description:
+          "Read-only product, API, methodology, privacy, and scanner guidance for ScanWebMCP.com.",
+        transport: "streamable-http",
+        endpoint: siteUrl("/mcp/docs"),
+        authentication: "none",
+      },
     ],
   });
 }

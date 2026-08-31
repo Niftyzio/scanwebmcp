@@ -1,0 +1,11 @@
+# ScanWebMCP.com developer interfaces
+
+> Public, no-key REST and MCP interfaces for scanning a website's agent surface.
+
+- [Developer guide](https://www.scanwebmcp.com/developers)
+- [OpenAPI 3.1 document](https://www.scanwebmcp.com/openapi.json)
+- [Authentication and limits](https://www.scanwebmcp.com/auth.md)
+- [Agent skill](https://www.scanwebmcp.com/skills/scan-webmcp/SKILL.md)
+- [MCP discovery](https://www.scanwebmcp.com/.well-known/mcp.json)
+
+Use POST /api/scan to start or reuse a scan, then GET /api/scan/{slug} for its public summary. GET /api/observatory returns aggregate corpus data. Automated callers should send requester=agent and respect 429 responses.

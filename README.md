@@ -17,6 +17,17 @@ The public scan caps at Callable. Transactable requires a separately consented e
 
 Outbound work is parallelised and individually bounded so a scan remains inside the 60-second route budget. Renderer failure becomes an explicit unmeasured signal and a recoverable queue item.
 
+## Agent and developer interfaces
+
+- Developer guide: <https://www.scanwebmcp.com/developers>
+- OpenAPI 3.1: <https://www.scanwebmcp.com/openapi.json>
+- Streamable HTTP MCP: <https://www.scanwebmcp.com/mcp>
+- Documentation MCP: <https://www.scanwebmcp.com/mcp/docs>
+- Agentic Resource Discovery: <https://www.scanwebmcp.com/.well-known/ard.json>
+- Agent skill: <https://www.scanwebmcp.com/skills/scan-webmcp/SKILL.md>
+
+The REST and MCP read/scan surfaces are public and require no key. Sending an emailed report remains a consequential action and uses only an address the human directly supplies.
+
 ## Local development
 
 Node 24 is required.

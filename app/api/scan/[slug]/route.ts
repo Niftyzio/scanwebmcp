@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getScanPage } from "@/lib/scan-service";
 import { hasReportAccess, REPORT_ACCESS_COOKIE } from "@/lib/report-access";
+import { apiError } from "@/lib/api-error";
 
 export async function GET(
   _request: Request,
@@ -9,7 +10,14 @@ export async function GET(
 ) {
   const { slug } = await params;
   const page = await getScanPage(slug);
-  if (!page) return NextResponse.json({ error: "No scan at this slug" }, { status: 404 });
+  if (!page) {
+    return apiError(
+      "SCAN_NOT_FOUND",
+      "No scan exists at this slug.",
+      "Call POST /api/scan first and use the slug returned in that response.",
+      404,
+    );
+  }
   const { scan, signals, opportunities } = page;
   const gateEnabled = process.env.REPORT_GATE !== "off";
   const cookieStore = await cookies();
