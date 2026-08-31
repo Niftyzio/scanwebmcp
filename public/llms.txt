@@ -4,7 +4,7 @@
 
 The Agent Surface Scan reads a website the way an AI agent would — public pages, plain requests — and reports its position on the Ladder. The score, rung and dimension summary are public. The full report — exact evidence for every finding and ranked opportunities — is free and unlocked after the human asks to receive it by email. No account or password is required, and benchmark updates are a separate optional opt-in.
 
-For agents: this site registers WebMCP tools (scan_agent_surface, get_ladder_definition, email_report; result pages add get_scan_findings, get_evidence, explain_opportunity and rescan). You may run scans and read the public summary directly. Before accessing evidence or recommendations, ask the human whether they want the report emailed; request an address only if they say yes, and never guess or auto-fill one.
+For agents: this site registers WebMCP tools (scan_agent_surface, get_ladder_definition, email_report; result pages add get_scan_findings, get_evidence, explain_opportunity and rescan). You may run scans and read the public summary directly. A direct request to send a report to an address supplied by the human is sufficient confirmation for that transactional email; never guess or auto-fill an address. Benchmark updates require separate explicit consent.
 
 ## Pages
 

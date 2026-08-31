@@ -8,6 +8,7 @@ type LiveObservatoryCorpusProps = {
   initialSnapshot: ObservatorySnapshot;
   signalsStored: number;
   agentHits: number;
+  agentHitOutcomes: { ok: number; refused: number; error: number };
   children: ReactNode;
 };
 
@@ -46,6 +47,7 @@ export default function LiveObservatoryCorpus({
   initialSnapshot,
   signalsStored,
   agentHits,
+  agentHitOutcomes,
   children,
 }: LiveObservatoryCorpusProps) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
@@ -118,7 +120,9 @@ export default function LiveObservatoryCorpus({
         Unclassified. <a href="/case-study">Read the case study →</a>{" "}
         Sector percentiles appear on result pages once a sector reaches 30 scanned sites. Corpus:
         {" "}{snapshot.sites} sites · {snapshot.scans} scans · {signalsStored.toLocaleString()} stored signals ·{" "}
-        {agentHits} tool calls made by AI agents against this site&apos;s own WebMCP surface.
+        {agentHits} WebMCP and MCP tool invocations against this site&apos;s own agent surface:{" "}
+        {agentHitOutcomes.ok} completed, {agentHitOutcomes.refused} refused safely and{" "}
+        {agentHitOutcomes.error} errored.
       </p>
     </>
   );

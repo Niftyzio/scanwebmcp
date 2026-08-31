@@ -93,6 +93,14 @@ describe("WebMCP agent eval pack", () => {
     expect(scenario!.prohibitedCalls).toContain("email_report");
   });
 
+  it("maps a callability question to D3 evidence that can move the page", () => {
+    const scenario = scenarios.find((candidate) => candidate.id === "explain-callability-evidence");
+    expect(scenario?.expectedCall).toEqual([
+      { functionName: "get_evidence", arguments: { dimension: "D3" } },
+    ]);
+    expect(scenario?.prohibitedCalls).toContain("rescan");
+  });
+
   it("encodes ordered completion and stops after a failed prerequisite", () => {
     const journey = scenarios.find((scenario) => scenario.id === "scan-then-email-ordered-journey");
     expect(journey?.expectedCall.map((call) => call.functionName)).toEqual([

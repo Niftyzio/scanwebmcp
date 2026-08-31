@@ -15,6 +15,16 @@ import {
   SCAN_WEBMCP_TOOL_NAMES,
   SITE_WEBMCP_TOOL_NAMES,
 } from "@/lib/webmcp-surface";
+import {
+  argumentsForWebMCPLogging,
+  outcomeForHttpFailure,
+  runTrackedWebMCPExecution,
+  withWebMCPOutcome,
+} from "@/lib/webmcp-execution";
+import {
+  selectReportEvidence,
+  weakestReportDimension,
+} from "@/lib/webmcp-report-tools";
 
 /**
  * Registers this page's WebMCP tools (document.modelContext). Two surfaces:
@@ -71,10 +81,14 @@ const LADDER = [
 ];
 
 const text = boundedWebMCPText;
+const refused = (message: string) => withWebMCPOutcome(text(message), "refused");
+const failedRequest = (status: number, message: string) =>
+  withWebMCPOutcome(text(message), outcomeForHttpFailure(status));
 
 const GATE_INSTRUCTION =
   "The full findings, timestamped evidence, and ranked recommendations are email-gated. " +
-  "Ask the human whether they would like the full report emailed to them. If they say yes, ask which email address to use, then call email_report. " +
+  "If the human already asked for delivery and supplied an email address in this conversation, call email_report next; that direct request is sufficient confirmation for the transactional report. " +
+  "Otherwise ask whether they would like the report emailed and which address to use. " +
   "Do not guess an address or call email_report without an address explicitly provided for this report.";
 
 function logHit(toolName: string, args: unknown, outcome: string, scanId?: number) {
@@ -131,24 +145,17 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
       execute: (args: Record<string, unknown>) => Promise<unknown> | unknown;
     }) => {
       const wrapped = {
-          ...tool,
-          ...normalizeWebMCPToolMetadata(tool),
-          execute: async (args: Record<string, unknown>) => {
-            try {
-              const result = await tool.execute(args ?? {});
-              const loggedArgs = tool.name === "email_report"
-                ? { url: args.url, benchmark_updates: args.benchmark_updates }
-                : args;
-              logHit(tool.name, loggedArgs, "ok", scan?.scanId);
-              return result;
-            } catch (e) {
-              const loggedArgs = tool.name === "email_report"
-                ? { url: args.url, benchmark_updates: args.benchmark_updates }
-                : args;
-              logHit(tool.name, loggedArgs, "error", scan?.scanId);
-              return text(`Tool error: ${e instanceof Error ? e.message : String(e)}`);
-            }
-          },
+        ...tool,
+        ...normalizeWebMCPToolMetadata(tool),
+        execute: async (args: Record<string, unknown>) => {
+          const input = args ?? {};
+          const loggedArgs = argumentsForWebMCPLogging(tool.name, input);
+          return runTrackedWebMCPExecution({
+            execute: () => tool.execute(input),
+            record: (outcome) => logHit(tool.name, loggedArgs, outcome, scan?.scanId),
+            formatError: (error) => text(`Tool error: ${error instanceof Error ? error.message : String(error)}`),
+          });
+        },
       };
       // React Strict Mode mounts, cleans up, and mounts again. Serialize every
       // registration so an async first mount is fully cancelled before the
@@ -171,7 +178,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
     register({
       name: "scan_agent_surface",
       description:
-        "Run an Agent Surface Scan of a website. Returns its public rung and dimension scores. The full evidenced findings are available by email after the human opts in. Takes 10–30 seconds.",
+        "Run an Agent Surface Scan of a website. Returns its public rung and scores. In a scan-and-email request, call this first and email_report only after it succeeds. Takes 10–30 seconds.",
       inputSchema: {
         type: "object",
         properties: { url: { type: "string", description: "The website to scan, e.g. example.com" } },
@@ -185,8 +192,12 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
           body: JSON.stringify({ url, requester: "agent" }),
         });
         const j = await res.json();
-        if (!res.ok) return text(`Scan refused: ${j.error}`);
-        const detail = await fetch(`/api/scan/${j.slug}`).then((r) => r.json());
+        if (!res.ok) return failedRequest(res.status, `Scan refused: ${j.error}`);
+        const detailResponse = await fetch(`/api/scan/${j.slug}`);
+        const detail = await detailResponse.json();
+        if (!detailResponse.ok) {
+          return failedRequest(detailResponse.status, `Scan completed but its public result could not be read: ${detail.error}`);
+        }
         return text(
           `Scan of ${detail.domain}: rung ${detail.rung} (${detail.rungName}) on the Agent Surface Ladder. ` +
             `Scores: D1 legibility ${detail.scores.d1}, D2 answerability ${detail.scores.d2}, D3 callability ${detail.scores.d3}, D4 transactability ${detail.scores.d4}, D5 standing ${detail.scores.d5}. ` +
@@ -222,13 +233,13 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
           ? `Send the full evidenced report for ${scan.domain} (or any other already-scanned site via the url argument) to an email address, and unlock the complete report on this page. `
           : "Send the full evidenced report for an already-scanned website to an email address (run scan_agent_surface first if the site hasn't been scanned). ") +
         "CONSEQUENTIAL — sends one transactional report. Benchmark updates require a separate boolean opt-in and email confirmation. " +
-        "Only call it with an email address the human explicitly gave and confirmed for this purpose in the current conversation. Never guess, look up, or auto-fill an address.",
+        "A direct request to send this report to an address the human supplied is sufficient confirmation for the transactional email. Never guess, look up, or auto-fill an address.",
       inputSchema: {
         type: "object",
         properties: {
           email: {
             type: "string",
-            description: "The email address the human explicitly provided and confirmed.",
+            description: "The address the human directly requested for this report.",
           },
           url: {
             type: "string",
@@ -252,10 +263,10 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
             // Mirrors the server's slugify so the lookup hits the same scan.
             slug = host.replace(/[^a-z0-9.]+/gi, "-").toLowerCase();
           } catch {
-            return text("That doesn't look like a valid website address.");
+            return refused("That doesn't look like a valid website address.");
           }
         }
-        if (!slug) return text("Pass the website (url) whose report should be emailed — or run scan_agent_surface first.");
+        if (!slug) return refused("Pass the website (url) whose report should be emailed — or run scan_agent_surface first.");
         const res = await fetch("/api/report-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -263,7 +274,10 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
         });
         const j = await res.json();
         if (!res.ok)
-          return text(`Report not sent: ${j.error}${res.status === 404 ? " Run scan_agent_surface first." : ""}`);
+          return failedRequest(
+            res.status,
+            `Report not sent: ${j.error}${res.status === 404 ? " Run scan_agent_surface first." : ""}`,
+          );
         const unlockingHere = scan && slug === scan.slug;
         if (unlockingHere) {
           setTimeout(() => location.reload(), 1200);
@@ -286,16 +300,18 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
           : `The public summary for ${scan.domain}. Full findings require the human to request the report by email.`,
         inputSchema: { type: "object", properties: {} },
         annotations: WEBMCP_ANNOTATIONS.externalReadOnly,
-        execute: () =>
-          scan.unlocked
+        execute: () => {
+          const weakest = weakestReportDimension(scan.scores);
+          return scan.unlocked
             ? text(
-                `${scan.domain} is rung ${scan.rung} (${scan.rungName}). Scores /100: legibility ${scan.scores.d1}, answerability ${scan.scores.d2}, callability ${scan.scores.d3}, transactability ${scan.scores.d4}, standing ${scan.scores.d5}. Opportunities, ranked: ${scan.opportunities
+                `${scan.domain} is rung ${scan.rung} (${scan.rungName}). Scores /100: legibility ${scan.scores.d1}, answerability ${scan.scores.d2}, callability ${scan.scores.d3}, transactability ${scan.scores.d4}, standing ${scan.scores.d5}. Weakest dimension: ${weakest.code} ${weakest.label} (${scan.scores[weakest.score]}/100); call get_evidence with dimension ${weakest.code} to inspect it. Opportunities, ranked: ${scan.opportunities
                   .map((o) => `${o.rank}. ${o.text} (impact ${o.impact}/5, ease ${o.ease}/5)`)
                   .join(" ")}`,
               )
             : text(
                 `${scan.domain} is rung ${scan.rung} (${scan.rungName}). Scores /100: legibility ${scan.scores.d1}, answerability ${scan.scores.d2}, callability ${scan.scores.d3}, transactability ${scan.scores.d4}, standing ${scan.scores.d5}. ${GATE_INSTRUCTION}`,
-              ),
+              );
+        },
       });
 
       register({
@@ -306,7 +322,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
         inputSchema: { type: "object", properties: {} },
         annotations: WEBMCP_ANNOTATIONS.externalReadOnly,
         execute: () => {
-          if (!scan.unlocked) return text(GATE_INSTRUCTION);
+          if (!scan.unlocked) return refused(GATE_INSTRUCTION);
           document.getElementById("tool-blueprint")?.scrollIntoView({ behavior: "smooth", block: "start" });
           if (scan.suggestedTools.length === 0)
             return text("The public scan did not reach enough capability evidence to make a responsible tool recommendation.");
@@ -324,14 +340,13 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
         inputSchema: { type: "object", properties: {} },
         annotations: WEBMCP_ANNOTATIONS.externalReadOnly,
         execute: () => {
-          if (!scan.unlocked) return text(GATE_INSTRUCTION);
+          if (!scan.unlocked) return refused(GATE_INSTRUCTION);
           const inventoryEvidence = document.getElementById("evidence-webmcp_tools_found")
             ?? document.getElementById("evidence-webmcp_registration");
           if (inventoryEvidence instanceof HTMLDetailsElement) inventoryEvidence.open = true;
           inventoryEvidence?.scrollIntoView({ behavior: "smooth", block: "center" });
-          if (!scan.webMCPInventory) {
-            return text(`${scan.domain}: this older scan has no structured WebMCP inventory. Run rescan to measure the current page-aware tool surface.`);
-          }
+          if (!scan.webMCPInventory)
+            return refused(`${scan.domain}: this older scan has no structured WebMCP inventory. Run rescan to measure the current page-aware tool surface.`);
           return text(summarizeWebMCPInventoryForAgent(scan.domain, scan.webMCPInventory));
         },
       });
@@ -340,7 +355,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
         name: "get_evidence",
         description:
           scan.unlocked
-            ? "The observed, timestamped evidence behind this scan's findings. Optionally pass signal_key for one signal; the page scrolls to and opens that evidence for the human reading alongside you."
+            ? "The timestamped evidence behind this scan. Pass signal_key or dimension D1-D5; omit both for the weakest dimension. The page opens and scrolls to the evidence."
             : "Access the report's timestamped evidence. This returns the email gate until the human has requested and unlocked the report.",
         inputSchema: {
           type: "object",
@@ -348,28 +363,40 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
             signal_key: {
               type: "string",
               description: scan.unlocked
-                ? "Optional signal key from the report. Omit it for a bounded summary of all findings."
+                ? "Optional exact signal key. Omit both inputs to inspect the weakest dimension."
                 : "Optional signal key. Signal names are included in the unlocked report.",
+            },
+            dimension: {
+              type: "string",
+              description: "Optional D1-D5 dimension. Omit both inputs to inspect the weakest dimension.",
             },
           },
         },
         annotations: WEBMCP_ANNOTATIONS.externalReadOnly,
-        execute: ({ signal_key }) => {
-          if (!scan.unlocked) return text(GATE_INSTRUCTION);
-          if (signal_key) {
-            const s = scan.signals.find((x) => x.key === signal_key);
-            if (!s) return text(`No signal named ${signal_key} in this scan.`);
-            const el = document.getElementById(`evidence-${s.key}`);
-            if (el instanceof HTMLDetailsElement) {
-              el.open = true;
-              el.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
+        execute: ({ signal_key, dimension }) => {
+          if (!scan.unlocked) return refused(GATE_INSTRUCTION);
+          const openEvidence = (signal: ScanData["signals"][number]) => {
+            const element = document.getElementById(`evidence-${signal.key}`);
+            if (element instanceof HTMLDetailsElement) element.open = true;
+            element?.scrollIntoView({ behavior: "smooth", block: "center" });
+          };
+          const selection = selectReportEvidence({
+            scores: scan.scores,
+            signals: scan.signals,
+            signalKey: signal_key,
+            dimension,
+          });
+          if (!selection.ok) return refused(selection.message);
+          if (typeof signal_key === "string" && signal_key) {
+            const s = selection.signals[0];
+            openEvidence(s);
             return text(
               `${s.key} (${s.dimension}) = ${s.value}${s.detail ? ` [${s.detail}]` : ""}. Observed at ${s.observedAt} on ${s.evidenceUrl}.${s.evidenceSnippet ? ` What the agent saw: "${s.evidenceSnippet}"` : ""}`,
             );
           }
+          openEvidence(selection.signals[0]);
           return text(
-            scan.signals
+            `${selection.focus} evidence: ` + selection.signals
               .map((s) => `${s.dimension} ${s.key}=${s.value}${s.detail ? ` (${s.detail})` : ""} @ ${s.evidenceUrl}`)
               .join(" | "),
           );
@@ -388,9 +415,9 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
         },
         annotations: WEBMCP_ANNOTATIONS.externalReadOnly,
         execute: ({ rank }) => {
-          if (!scan.unlocked) return text(GATE_INSTRUCTION);
+          if (!scan.unlocked) return refused(GATE_INSTRUCTION);
           const o = scan.opportunities.find((x) => x.rank === rank);
-          if (!o) return text(`This scan has ${scan.opportunities.length} opportunities; rank ${rank} doesn't exist.`);
+          if (!o) return refused(`This scan has ${scan.opportunities.length} opportunities; rank ${rank} doesn't exist.`);
           const el = document.getElementById(`opportunity-${o.rank}`);
           el?.scrollIntoView({ behavior: "smooth", block: "center" });
           return text(`Opportunity ${o.rank} (impact ${o.impact}/5, ease ${o.ease}/5): ${o.text}`);
@@ -409,7 +436,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
             body: JSON.stringify({ url: scan.domain, rescan: true, requester: "agent" }),
           });
           const j = await res.json();
-          if (!res.ok) return text(`Re-scan refused: ${j.error}`);
+          if (!res.ok) return failedRequest(res.status, `Re-scan refused: ${j.error}`);
           setTimeout(() => location.reload(), 1500);
           return text(`Fresh scan of ${scan.domain} complete — the page is reloading with the new result at /scan/${j.slug}.`);
         },

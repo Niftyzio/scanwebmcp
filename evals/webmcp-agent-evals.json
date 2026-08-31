@@ -117,11 +117,12 @@
         { "role": "user", "content": "Why did this site receive its callability score? Show me the evidence." }
       ],
       "expectedCall": [
-        { "functionName": "get_evidence", "arguments": {} }
+        { "functionName": "get_evidence", "arguments": { "dimension": "D3" } }
       ],
       "prohibitedCalls": ["rescan"],
       "successCriteria": [
         "Grounds the answer in the stored, timestamped evidence.",
+        "Opens and scrolls to callability evidence on the page.",
         "Does not run a new scan when the user asked about the current result."
       ]
     },
@@ -239,6 +240,7 @@
       "prohibitedCalls": [],
       "successCriteria": [
         "Runs the scan before requesting delivery of its report.",
+        "Treats the direct delivery request and supplied address as confirmation without asking again.",
         "Uses the explicit destination and keeps benchmark updates disabled."
       ]
     },
