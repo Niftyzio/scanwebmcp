@@ -5,7 +5,7 @@
  * (report_sent=false) and a later flush picks them up. Never fatal.
  */
 import { createReportAccessToken } from "./report-access";
-import { siteUrl } from "./site";
+import { SITE_NAME, siteUrl } from "./site";
 
 export interface ReportEmail {
   to: string;
@@ -17,7 +17,7 @@ export interface ReportEmail {
   marketingConfirmationToken?: string;
 }
 
-const FROM = process.env.EMAIL_FROM ?? "Agent Surface Scan <scan@nocodelab.ai>";
+const FROM = process.env.EMAIL_FROM ?? `${SITE_NAME} <scan@nocodelab.ai>`;
 
 export async function sendReportEmail(r: ReportEmail): Promise<{ sent: boolean; error?: string }> {
   const key = process.env.RESEND_API_KEY;
@@ -39,7 +39,7 @@ export async function sendReportEmail(r: ReportEmail): Promise<{ sent: boolean; 
       body: JSON.stringify({
         from: FROM,
         to: [r.to],
-        subject: `Your Agent Surface Scan: ${r.domain}${r.composite != null ? ` — ${r.composite}/100` : ""}`,
+        subject: `Your ${SITE_NAME} report: ${r.domain}${r.composite != null ? ` — ${r.composite}/100` : ""}`,
         text: [
           `Your scan of ${r.domain} is ready.`,
           ``,
@@ -57,7 +57,7 @@ export async function sendReportEmail(r: ReportEmail): Promise<{ sent: boolean; 
                 ``,
               ]
             : []),
-          `— Agent Surface Scan, by Agentic Sara`,
+          `— ${SITE_NAME}, by Agentic Sara`,
         ].join("\n"),
       }),
     });
@@ -89,7 +89,7 @@ export async function sendMarketingConfirmationEmail(opts: {
         from: FROM,
         to: [opts.to],
         subject: `Confirm benchmark updates for ${opts.domain}`,
-        text: `Confirm occasional Agent Surface Scan benchmark updates for ${opts.domain}:\n\n${url}\n\nNo updates will be sent unless you confirm.`,
+        text: `Confirm occasional ${SITE_NAME} benchmark updates for ${opts.domain}:\n\n${url}\n\nNo updates will be sent unless you confirm.`,
       }),
     });
     return response.ok ? { sent: true } : { sent: false, error: `resend_http_${response.status}` };

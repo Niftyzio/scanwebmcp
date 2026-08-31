@@ -3,7 +3,7 @@ import { siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "How the scanner behaves",
-  description: "What the Agent Surface Scan fetches, how it identifies itself, and how to opt out.",
+  description: "What ScanWebMCP.com fetches, how its scanner identifies itself, and how to opt out.",
 };
 
 export default function AboutScanner() {
@@ -11,7 +11,7 @@ export default function AboutScanner() {
     <main className="wrap article editorial-page">
       <h1>How the scanner behaves</h1>
       <p>
-        The Agent Surface Scan reads a site the way an AI agent would, and only that: public pages,
+        ScanWebMCP.com reads a site the way an AI agent would, and only that: public pages,
         plain HTTP requests, no authentication, nothing bypassed.
       </p>
       <ul>

@@ -8,12 +8,12 @@ export const metadata: Metadata = {
 };
 
 const SNIPPET = `<script>
-// Agent Surface Scan — starter WebMCP tool (API current as of late Aug 2026).
+// ScanWebMCP.com — starter WebMCP tool (API current as of late Aug 2026).
 // Wraps your existing enquiry form as a tool an AI assistant can call,
 // with the visitor confirming before anything is sent.
 (function () {
   // Publish a detectable manifest FIRST — ordinary browsers don't implement
-  // modelContext, so this is how scanners (and the Agent Surface Scan) can
+  // modelContext, so this is how scanners (including ScanWebMCP.com) can
   // verify your site declares tools:
   window.__webmcpToolManifest = ["send_enquiry"];
   document.documentElement.dataset.webmcpTools = "send_enquiry";

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Manrope } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
-import { SITE_ORIGIN } from "@/lib/site";
+import { SITE_NAME, SITE_ORIGIN } from "@/lib/site";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agent Surface Scan",
+  title: SITE_NAME,
   description:
     "Which of your business capabilities could an AI agent call today? A free, evidenced scan against the Agent Surface Ladder.",
 };
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 const JSON_LD = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  name: "Agent Surface Scan",
+  name: SITE_NAME,
   url: SITE_ORIGIN,
   applicationCategory: "BusinessApplication",
   description:
@@ -53,7 +53,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <header className="site-header">
           <a href="/" className="wordmark">
             <span className="wordmark-mark" aria-hidden="true"><span /></span>
-            <span>Agent Surface</span>
+            <span>{SITE_NAME}</span>
           </a>
           <nav aria-label="Primary navigation">
             <a href="/about-scanner">How it works</a>
@@ -73,7 +73,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <Analytics />
         <footer className="site-footer">
-          <p className="footer-brand">Agent Surface Scan</p>
+          <p className="footer-brand">{SITE_NAME}</p>
           <p className="muted">
             A free, evidence-based check of what AI agents can see and do on your website.
           </p>

@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import WebMCPTools from "@/components/WebMCPTools";
 
 export const metadata: Metadata = {
-  title: "FAQ — Agent Surface Scan",
+  title: "FAQ — ScanWebMCP.com",
   description: "Direct answers about the scan, the Ladder, what we store, and how agents call this site.",
 };
 
 const FAQS: [string, string][] = [
   [
-    "What does the Agent Surface Scan actually do?",
+    "What does ScanWebMCP.com actually do?",
     "It reads your website the way an AI agent would — public pages, plain requests, no login — and reports where you sit on the Agent Surface Ladder: Invisible, Readable, Answerable, Callable or Transactable. Every finding carries the exact URL, timestamp and observed evidence behind it.",
   ],
   [
@@ -41,7 +41,7 @@ const FAQS: [string, string][] = [
   ],
   [
     "Can my AI assistant use this site directly?",
-    "Yes, two ways. In an agent-capable browser, this site registers WebMCP tools; any MCP-compatible app can also discover the endpoint through /.well-known/mcp. An assistant can run a scan and read the public summary directly. For the full evidence, it must ask whether you want the report emailed and request an address only after you say yes.",
+    "Yes, two ways. In an agent-capable browser, this site registers WebMCP tools; any MCP-compatible app can also discover the endpoint through /.well-known/mcp. An assistant can run a scan and read the public summary directly. If you directly request the report and supply an address, it can email it; otherwise it must ask whether you want delivery and which address to use.",
   ],
   [
     "How often does the scoring change?",

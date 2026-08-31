@@ -25,6 +25,7 @@ import {
   selectReportEvidence,
   weakestReportDimension,
 } from "@/lib/webmcp-report-tools";
+import { SITE_NAME } from "@/lib/site";
 
 /**
  * Registers this page's WebMCP tools (document.modelContext). Two surfaces:
@@ -178,7 +179,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
     register({
       name: "scan_agent_surface",
       description:
-        "Run an Agent Surface Scan of a website. Returns its public rung and scores. In a scan-and-email request, call this first and email_report only after it succeeds. Takes 10–30 seconds.",
+        `Scan a website with ${SITE_NAME}. Returns its public rung and scores. In a scan-and-email request, call this first and email_report only after it succeeds. Takes 10–30 seconds.`,
       inputSchema: {
         type: "object",
         properties: { url: { type: "string", description: "The website to scan, e.g. example.com" } },
@@ -230,8 +231,8 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
       name: "email_report",
       description:
         (scan
-          ? `Send the full evidenced report for ${scan.domain} (or any other already-scanned site via the url argument) to an email address, and unlock the complete report on this page. `
-          : "Send the full evidenced report for an already-scanned website to an email address (run scan_agent_surface first if the site hasn't been scanned). ") +
+          ? `Send the full evidenced ${SITE_NAME} report for ${scan.domain} (or any other already-scanned site via the url argument) to an email address, and unlock the complete report on this page. `
+          : `Send the full evidenced ${SITE_NAME} report for an already-scanned website to an email address (run scan_agent_surface first if the site hasn't been scanned). `) +
         "CONSEQUENTIAL — sends one transactional report. Benchmark updates require a separate boolean opt-in and email confirmation. " +
         "A direct request to send this report to an address the human supplied is sufficient confirmation for the transactional email. Never guess, look up, or auto-fill an address.",
       inputSchema: {

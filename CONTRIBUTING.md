@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Agent Surface Scan. Keep changes small, evidenced and safe to reproduce.
+Thanks for helping improve ScanWebMCP.com. Keep changes small, evidenced and safe to reproduce.
 
 ## Development setup
 

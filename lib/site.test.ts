@@ -11,8 +11,9 @@ afterEach(() => {
 describe("canonical site origin", () => {
   it("normalizes a configured public origin", async () => {
     process.env.NEXT_PUBLIC_BASE_URL = "https://example.com/some/path?ignored=true";
-    const { SITE_ORIGIN, siteUrl } = await import("./site");
+    const { SITE_NAME, SITE_ORIGIN, siteUrl } = await import("./site");
 
+    expect(SITE_NAME).toBe("ScanWebMCP.com");
     expect(SITE_ORIGIN).toBe("https://example.com");
     expect(siteUrl("/mcp")).toBe("https://example.com/mcp");
     expect(siteUrl("//evil.example/path")).toBe("https://example.com/evil.example/path");
@@ -24,8 +25,16 @@ describe("canonical site origin", () => {
       process.env.NEXT_PUBLIC_BASE_URL = configured;
       const { SITE_ORIGIN } = await import("./site");
 
-      expect(SITE_ORIGIN).toBe("https://scanwebmcp.vercel.app");
+      expect(SITE_ORIGIN).toBe("https://www.scanwebmcp.com");
       vi.resetModules();
     },
   );
+
+  it("canonicalizes the legacy Vercel origin to the public domain", async () => {
+    process.env.NEXT_PUBLIC_BASE_URL = "https://scanwebmcp.vercel.app";
+    const { SITE_ORIGIN, siteUrl } = await import("./site");
+
+    expect(SITE_ORIGIN).toBe("https://www.scanwebmcp.com");
+    expect(siteUrl("/scan/example.com")).toBe("https://www.scanwebmcp.com/scan/example.com");
+  });
 });

@@ -5,9 +5,9 @@ import LiveObservatoryCorpus from "@/components/LiveObservatoryCorpus";
 import { getShopifyWebMCPCohortStats } from "@/lib/shopify-webmcp-cohort";
 
 export const metadata: Metadata = {
-  title: "The Agent Surface Observatory",
+  title: "The ScanWebMCP Observatory",
   description:
-    "Live findings from the Agent Surface Scan corpus: how readable, answerable and callable the business web actually is for AI agents.",
+    "Live findings from the ScanWebMCP.com corpus: how readable, answerable and callable the business web actually is for AI agents.",
 };
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,7 +23,7 @@ export default async function Observatory() {
     <main className="wrap editorial-page editorial-observatory">
       <WebMCPTools mode="site" />
       <p className="kicker">Live corpus data · updates with every scan · started 29 August 2026</p>
-      <h1>The Agent Surface Observatory</h1>
+      <h1>The ScanWebMCP Observatory</h1>
       <p className="lede">
         What AI agents actually find when they visit the business web — measured, not estimated.
         Every number below comes from real scans with stored evidence.
