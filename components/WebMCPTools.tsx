@@ -7,13 +7,18 @@ import {
   WEBMCP_ANNOTATIONS,
   type WebMCPToolAnnotations,
 } from "@/lib/webmcp-tool-contract";
+import {
+  summarizeWebMCPInventoryForAgent,
+  type WebMCPInventory,
+} from "@/lib/webmcp-inventory";
 
 /**
  * Registers this page's WebMCP tools (document.modelContext). Two surfaces:
  *  - mode="site": scan_agent_surface, get_ladder_definition
  *  - mode="scan": those plus page-state tools — the agent works on the same
- *    scan the human is looking at (get_scan_findings, get_evidence,
- *    explain_opportunity, rescan), and the page visibly responds.
+ *    scan the human is looking at (get_scan_findings,
+ *    get_webmcp_inventory, get_evidence, explain_opportunity, rescan), and
+ *    the page visibly responds.
  *
  * Feature-detects document.modelContext only (the navigator alias is
  * deprecated). Every invocation is logged to /api/agent-hit — including on
@@ -27,6 +32,7 @@ type ScanData = {
   rung: number;
   rungName: string;
   unlocked: boolean;
+  webMCPInventory: WebMCPInventory | null;
   scores: Record<string, number>;
   opportunities: { rank: number; text: string; impact: number; ease: number }[];
   suggestedTools: {
@@ -87,7 +93,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
     // /make-callable.
     const toolNames =
       mode === "scan"
-        ? ["scan_agent_surface", "get_ladder_definition", "get_scan_findings", "get_recommended_tools", "get_evidence", "explain_opportunity", "rescan", "email_report"]
+        ? ["scan_agent_surface", "get_ladder_definition", "get_scan_findings", "get_webmcp_inventory", "get_recommended_tools", "get_evidence", "explain_opportunity", "rescan", "email_report"]
         : ["scan_agent_surface", "get_ladder_definition", "email_report"];
     try {
       (window as unknown as { __webmcpToolManifest?: string[] }).__webmcpToolManifest = toolNames;
@@ -303,6 +309,26 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
           return text(scan.suggestedTools.map((tool, index) =>
             `${index + 1}. ${tool.name} — ${tool.description} Inputs: ${tool.inputs.join(", ")}. Returns: ${tool.output}. Human control: ${tool.confirmation}. Value ${tool.businessValue}/5, effort ${tool.effort}/5, ${tool.confidence.toLowerCase()} confidence. Evidence: ${tool.evidence}`,
           ).join(" | "));
+        },
+      });
+
+      register({
+        name: "get_webmcp_inventory",
+        description: scan.unlocked
+          ? `The live WebMCP tools observed across the scanned pages for ${scan.domain}: classification, first observed page, inputs, page-dependent behavior, and missing contract metadata. The page opens the matching evidence.`
+          : `Access the live WebMCP tool inventory for ${scan.domain}. This returns the email gate until the report is unlocked.`,
+        inputSchema: { type: "object", properties: {} },
+        annotations: WEBMCP_ANNOTATIONS.externalReadOnly,
+        execute: () => {
+          if (!scan.unlocked) return text(GATE_INSTRUCTION);
+          const inventoryEvidence = document.getElementById("evidence-webmcp_tools_found")
+            ?? document.getElementById("evidence-webmcp_registration");
+          if (inventoryEvidence instanceof HTMLDetailsElement) inventoryEvidence.open = true;
+          inventoryEvidence?.scrollIntoView({ behavior: "smooth", block: "center" });
+          if (!scan.webMCPInventory) {
+            return text(`${scan.domain}: this older scan has no structured WebMCP inventory. Run rescan to measure the current page-aware tool surface.`);
+          }
+          return text(summarizeWebMCPInventoryForAgent(scan.domain, scan.webMCPInventory));
         },
       });
 

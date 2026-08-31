@@ -97,6 +97,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
     rung,
     rungName: RUNGS[rung],
     unlocked,
+    webMCPInventory: unlocked ? webMCPInventory : null,
     scores: { d1: scan.d1, d2: scan.d2, d3: scan.d3, d4: scan.d4, d5: scan.d5, composite: scan.composite },
     opportunities: unlocked
       ? opportunities.map((o) => ({
