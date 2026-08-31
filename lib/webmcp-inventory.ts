@@ -30,6 +30,90 @@ export interface WebMCPInventory {
   blockedRuntimeUrls: string[];
 }
 
+function pageLabel(pageUrl: string): string {
+  try {
+    const url = new URL(pageUrl);
+    return `${url.pathname || "/"}${url.search}`;
+  } catch {
+    return pageUrl;
+  }
+}
+
+function schemaSummary(inputSchema: unknown): { label: string; issues: string[] } {
+  if (!inputSchema || typeof inputSchema !== "object" || Array.isArray(inputSchema)) {
+    return { label: "inputs unknown", issues: ["input schema missing"] };
+  }
+
+  const schema = inputSchema as Record<string, unknown>;
+  const properties = schema.properties;
+  if (properties != null && (typeof properties !== "object" || Array.isArray(properties))) {
+    return { label: "inputs malformed", issues: ["schema properties malformed"] };
+  }
+
+  const inputNames = properties && typeof properties === "object"
+    ? Object.keys(properties as Record<string, unknown>)
+    : [];
+  const issues = typeof schema.type === "string" ? [] : ["schema type missing"];
+  return {
+    label: inputNames.length > 0 ? `inputs ${inputNames.join(", ")}` : "no inputs",
+    issues,
+  };
+}
+
+function annotationIssues(tool: WebMCPObservedTool): string[] {
+  if (!tool.annotations || Object.keys(tool.annotations).length === 0) {
+    return ["annotations missing"];
+  }
+
+  const issues: string[] = [];
+  for (const hint of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) {
+    if (typeof tool.annotations[hint] !== "boolean") issues.push(`${hint} missing`);
+  }
+  return issues;
+}
+
+/** Compact, deterministic inventory for an agent. The caller applies the
+ * shared WebMCP output budget after this prioritizes counts and tool names. */
+export function summarizeWebMCPInventoryForAgent(
+  domain: string,
+  inventory: WebMCPInventory,
+): string {
+  const measuredContexts = inventory.contexts.filter((context) => context.witnessAvailable);
+  if (inventory.totalCount === 0) {
+    if (measuredContexts.length === 0) {
+      const blocked = inventory.blockedRuntimeUrls.length > 0
+        ? ` ${inventory.blockedRuntimeUrls.length} WebMCP-looking runtime ${inventory.blockedRuntimeUrls.length === 1 ? "dependency was" : "dependencies were"} blocked, so absence is not proven.`
+        : " No page exposed a readable live registry, so absence is not proven.";
+      return `${domain}: live WebMCP inventory was unmeasured.${blocked}`;
+    }
+    return `${domain}: 0 live WebMCP tools were observed across ${measuredContexts.length} measured page ${measuredContexts.length === 1 ? "context" : "contexts"}.`;
+  }
+
+  const capturedNote = inventory.capturedCount < inventory.totalCount
+    ? ` ${inventory.capturedCount} descriptors were retained as a bounded sample.`
+    : "";
+  const contextNote = inventory.contextDependent
+    ? "The exposed tool surface changes by page."
+    : "The exposed tool surface was consistent across measured pages.";
+  const tools = inventory.tools.map((tool) => {
+    const schema = schemaSummary(tool.inputSchema);
+    return `${tool.name} [${tool.kind}] on ${pageLabel(tool.pageUrl)}; ${schema.label}`;
+  });
+  const gaps = inventory.tools.flatMap((tool) => {
+    const issues = [...schemaSummary(tool.inputSchema).issues, ...annotationIssues(tool)];
+    if (!tool.description?.trim()) issues.unshift("description missing");
+    return issues.length > 0 ? [`${tool.name}: ${issues.join(", ")}`] : [];
+  });
+  const contractNote = gaps.length > 0
+    ? `Contract review: ${gaps.join(" | ")}.`
+    : "Contract review: no obvious description, schema, or standard annotation gaps in the captured descriptors.";
+  const blockedNote = inventory.blockedRuntimeUrls.length > 0
+    ? ` ${inventory.blockedRuntimeUrls.length} runtime ${inventory.blockedRuntimeUrls.length === 1 ? "dependency was" : "dependencies were"} blocked; the inventory may be incomplete.`
+    : "";
+
+  return `${domain}: ${inventory.totalCount} distinct live WebMCP ${inventory.totalCount === 1 ? "tool" : "tools"} observed across ${measuredContexts.length} measured page ${measuredContexts.length === 1 ? "context" : "contexts"}.${capturedNote} ${contextNote} Observed tools: ${tools.join(" | ")}. ${contractNote}${blockedNote}`;
+}
+
 const SENSITIVE_ACTION = /(?:checkout|purchase|payment|pay\b|place[_ -]?order|book(?:ing)?|reserve|subscribe|submit|send|contact|email|delete|cancel|refund|transfer|invite|publish|share)/i;
 const ACTION = /(?:add|update|remove|set|show|open|navigate|start|manage|create|edit|save|select|filter|fill|upload|download|view[_ -]?(?:product|variant))/i;
 const READ_ONLY_NAME = /^(?:get|search|list|read|find|browse|about)(?:[._ -]|$)/i;

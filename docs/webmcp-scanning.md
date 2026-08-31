@@ -23,6 +23,13 @@ and deterministic category (`answer`, `action`, or `sensitive_action`). The
 public report shows counts; names and descriptors remain behind the existing
 email gate.
 
+On an unlocked report, `get_webmcp_inventory()` exposes the same structured
+evidence to an agent and opens the corresponding evidence card for the human.
+Its bounded response includes each captured tool's deterministic category,
+first observed page, input names, whether the surface changes by page, and
+obvious description, schema, or standard-annotation gaps. Locked reports return
+the existing consent-safe email gate rather than inventory details.
+
 Registrations are unioned across pages. A tool is counted once site-wide while
 retaining the first page on which it was witnessed. The report also records
 whether the tool set changes by page.
