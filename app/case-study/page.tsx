@@ -62,6 +62,10 @@ export default function CaseStudy() {
         The corpus says almost nobody has taken those steps yet — which is precisely the
         opportunity.
       </p>
+      <p>
+        For a field example beyond this site, see our <a href="/case-study/shopify-webmcp">six-store
+        Shopify WebMCP study</a>: ten live commerce tools, page-aware evidence and one useful exception.
+      </p>
       <section className="cta">
         <h2>Start where we started</h2>
         <p><a className="button" href="/">Scan your site</a></p>

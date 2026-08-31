@@ -66,7 +66,7 @@ function annotationIssues(tool: WebMCPObservedTool): string[] {
   }
 
   const issues: string[] = [];
-  for (const hint of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) {
+  for (const hint of ["readOnlyHint", "untrustedContentHint"]) {
     if (typeof tool.annotations[hint] !== "boolean") issues.push(`${hint} missing`);
   }
   return issues;
@@ -145,17 +145,76 @@ export function classifyWebMCPTool(tool: WebMCPToolDescriptor): WebMCPToolKind {
   return "answer";
 }
 
+const MAX_SERIALIZED_SCHEMA_CHARS = 100_000;
+
+/** Chrome has shipped getTools() transports that serialize inputSchema even
+ * though the imperative API exposes it as an object. Accept both shapes and
+ * keep malformed or excessively large strings out of stored evidence. */
+function cleanInputSchema(raw: unknown): unknown | undefined {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw;
+  if (typeof raw !== "string" || raw.length > MAX_SERIALIZED_SCHEMA_CHARS) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** CDP used readOnly/untrustedContent before getTools() adopted the current
+ * WebMCP hint names. Normalize both transports into the public contract. */
+function cleanAnnotations(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const annotations = { ...(raw as Record<string, unknown>) };
+  if (typeof annotations.readOnlyHint !== "boolean" && typeof annotations.readOnly === "boolean") {
+    annotations.readOnlyHint = annotations.readOnly;
+  }
+  if (
+    typeof annotations.untrustedContentHint !== "boolean"
+    && typeof annotations.untrustedContent === "boolean"
+  ) {
+    annotations.untrustedContentHint = annotations.untrustedContent;
+  }
+  delete annotations.readOnly;
+  delete annotations.untrustedContent;
+  return annotations;
+}
+
 function cleanDescriptor(raw: unknown): WebMCPToolDescriptor | null {
   if (!raw || typeof raw !== "object") return null;
   const item = raw as Record<string, unknown>;
   if (typeof item.name !== "string" || item.name.trim().length === 0) return null;
+  const inputSchema = cleanInputSchema(item.inputSchema);
+  const annotations = cleanAnnotations(item.annotations);
   return {
     name: item.name.trim().slice(0, 300),
     ...(typeof item.description === "string" ? { description: item.description.slice(0, 4_000) } : {}),
-    ...(item.inputSchema && typeof item.inputSchema === "object" ? { inputSchema: item.inputSchema } : {}),
-    ...(item.annotations && typeof item.annotations === "object"
-      ? { annotations: item.annotations as Record<string, unknown> }
-      : {}),
+    ...(inputSchema ? { inputSchema } : {}),
+    ...(annotations ? { annotations } : {}),
+  };
+}
+
+function mergeDescriptors(
+  current: WebMCPToolDescriptor,
+  incoming: WebMCPToolDescriptor,
+): WebMCPToolDescriptor {
+  const description = current.description?.trim()
+    ? current.description
+    : incoming.description;
+  const annotations = current.annotations || incoming.annotations
+    ? { ...incoming.annotations, ...current.annotations }
+    : undefined;
+  return {
+    name: current.name,
+    ...(description ? { description } : {}),
+    ...(current.inputSchema !== undefined
+      ? { inputSchema: current.inputSchema }
+      : incoming.inputSchema !== undefined
+        ? { inputSchema: incoming.inputSchema }
+        : {}),
+    ...(annotations ? { annotations } : {}),
   };
 }
 
@@ -164,7 +223,9 @@ export function normalizeWebMCPTools(raw: unknown): WebMCPToolDescriptor[] {
   const tools = new Map<string, WebMCPToolDescriptor>();
   for (const item of raw) {
     const tool = cleanDescriptor(item);
-    if (tool && !tools.has(tool.name)) tools.set(tool.name, tool);
+    if (!tool) continue;
+    const current = tools.get(tool.name);
+    tools.set(tool.name, current ? mergeDescriptors(current, tool) : tool);
   }
   return [...tools.values()];
 }

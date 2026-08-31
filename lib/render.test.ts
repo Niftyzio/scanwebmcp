@@ -7,6 +7,7 @@ import {
   isWebMCPProbeRequestAllowed,
   pollRuntimeToolRegistry,
   remoteBrowserProtocol,
+  shouldRetryUnmeasuredRemoteProbe,
   withWebMCPLaunchOptions,
   type WebMCPProbe,
 } from "./render";
@@ -78,6 +79,16 @@ describe("WebMCP runtime evidence", () => {
 });
 
 describe("remote browser transport", () => {
+  it("retries only an unmeasured, unblocked remote witness", () => {
+    expect(shouldRetryUnmeasuredRemoteProbe(probe())).toBe(true);
+    expect(shouldRetryUnmeasuredRemoteProbe(probe({ witnessAvailable: true }))).toBe(false);
+    expect(shouldRetryUnmeasuredRemoteProbe(probe({
+      blockedRuntimeUrls: ["https://cdn.example/webmcp.js"],
+    }))).toBe(false);
+    expect(shouldRetryUnmeasuredRemoteProbe(probe({ renderer: "playwright" }))).toBe(false);
+    expect(shouldRetryUnmeasuredRemoteProbe(probe({ ok: false }))).toBe(false);
+  });
+
   it("converts Browserless native Chromium endpoints to CDP", () => {
     const endpoint = new URL(browserlessCDPEndpoint(
       "wss://production-lon.browserless.io/chromium/playwright?token=secret&launch=%7B%7D",

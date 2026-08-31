@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildWebMCPInventory,
   classifyWebMCPTool,
+  normalizeWebMCPTools,
   parseWebMCPInventory,
   serializeWebMCPInventory,
   summarizeWebMCPInventoryForAgent,
@@ -9,6 +10,41 @@ import {
 } from "./webmcp-inventory";
 
 describe("WebMCP tool inventory", () => {
+  it("normalizes serialized Chrome schemas and legacy CDP annotation names", () => {
+    expect(normalizeWebMCPTools([{
+      name: "search_catalog",
+      inputSchema: JSON.stringify({ type: "object", properties: { query: { type: "string" } } }),
+      annotations: { readOnly: true, untrustedContent: true },
+    }])).toEqual([{
+      name: "search_catalog",
+      inputSchema: { type: "object", properties: { query: { type: "string" } } },
+      annotations: { readOnlyHint: true, untrustedContentHint: true },
+    }]);
+  });
+
+  it("enriches duplicate registry descriptors instead of discarding CDP metadata", () => {
+    expect(normalizeWebMCPTools([
+      { name: "get_cart", description: "Return the current cart" },
+      {
+        name: "get_cart",
+        description: "Older transport description",
+        inputSchema: { type: "object", properties: {} },
+        annotations: { readOnly: true, untrustedContent: false },
+      },
+    ])).toEqual([{
+      name: "get_cart",
+      description: "Return the current cart",
+      inputSchema: { type: "object", properties: {} },
+      annotations: { readOnlyHint: true, untrustedContentHint: false },
+    }]);
+  });
+
+  it("drops malformed serialized schemas", () => {
+    expect(normalizeWebMCPTools([{ name: "broken", inputSchema: "{not-json" }])).toEqual([
+      { name: "broken" },
+    ]);
+  });
+
   it("classifies answer, action and sensitive action from observed descriptors", () => {
     expect(classifyWebMCPTool({ name: "search_catalog", annotations: { readOnlyHint: true } })).toBe("answer");
     expect(classifyWebMCPTool({ name: "get_cart", description: "Return the current cart" })).toBe("answer");
@@ -47,7 +83,7 @@ describe("WebMCP tool inventory", () => {
         name: "search_catalog",
         description: "Search products",
         inputSchema: { type: "object", properties: { query: { type: "string" } } },
-        annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+        annotations: { readOnlyHint: true, untrustedContentHint: true },
       }]],
       [contexts[1].finalUrl, [{ name: "add_to_cart", description: "Add a product to the cart" }]],
     ]));
@@ -60,6 +96,9 @@ describe("WebMCP tool inventory", () => {
     expect(summary).toContain("inputs query");
     expect(summary).toContain("add_to_cart [action] on /products/router");
     expect(summary).toContain("add_to_cart: input schema missing, annotations missing");
+    expect(summary).not.toContain("destructiveHint");
+    expect(summary).not.toContain("idempotentHint");
+    expect(summary).not.toContain("openWorldHint");
   });
 
   it("distinguishes a verified zero from an unmeasured registry", () => {
