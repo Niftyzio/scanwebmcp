@@ -11,6 +11,7 @@
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "test:evals": "vitest run lib/webmcp-evals.test.ts",
     "check": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {

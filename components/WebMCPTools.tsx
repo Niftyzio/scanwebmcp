@@ -11,10 +11,14 @@ import {
   summarizeWebMCPInventoryForAgent,
   type WebMCPInventory,
 } from "@/lib/webmcp-inventory";
+import {
+  SCAN_WEBMCP_TOOL_NAMES,
+  SITE_WEBMCP_TOOL_NAMES,
+} from "@/lib/webmcp-surface";
 
 /**
  * Registers this page's WebMCP tools (document.modelContext). Two surfaces:
- *  - mode="site": scan_agent_surface, get_ladder_definition
+ *  - mode="site": scan_agent_surface, get_ladder_definition, email_report
  *  - mode="scan": those plus page-state tools — the agent works on the same
  *    scan the human is looking at (get_scan_findings,
  *    get_webmcp_inventory, get_evidence, explain_opportunity, rescan), and
@@ -93,10 +97,10 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
     // /make-callable.
     const toolNames =
       mode === "scan"
-        ? ["scan_agent_surface", "get_ladder_definition", "get_scan_findings", "get_webmcp_inventory", "get_recommended_tools", "get_evidence", "explain_opportunity", "rescan", "email_report"]
-        : ["scan_agent_surface", "get_ladder_definition", "email_report"];
+        ? SCAN_WEBMCP_TOOL_NAMES
+        : SITE_WEBMCP_TOOL_NAMES;
     try {
-      (window as unknown as { __webmcpToolManifest?: string[] }).__webmcpToolManifest = toolNames;
+      (window as unknown as { __webmcpToolManifest?: readonly string[] }).__webmcpToolManifest = toolNames;
       document.documentElement.dataset.webmcpTools = toolNames.join(",");
     } catch {
       /* manifest is best-effort */

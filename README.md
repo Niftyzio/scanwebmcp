@@ -38,6 +38,19 @@ npm run check
 npx tsx scripts/smoke.ts example.com
 ```
 
+## WebMCP eval pack
+
+The committed [WebMCP agent eval pack](evals/README.md) contains 12 scenarios
+covering tool selection, parameter mapping, call ordering, full journeys,
+consent and mid-chain failure. Its `expectedCall` format follows Chrome's
+[WebMCP eval guidance](https://developer.chrome.com/docs/ai/webmcp/evals), and a
+deterministic test keeps every scenario aligned with the tool names actually
+published by the browser surface.
+
+```sh
+npm run test:evals
+```
+
 ## Database and scheduled jobs
 
 The complete baseline and forward migrations live in [`supabase/migrations`](supabase/migrations). For a fresh local database, install Docker and run:
