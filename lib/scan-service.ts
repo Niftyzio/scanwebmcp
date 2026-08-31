@@ -155,6 +155,22 @@ export async function requestScan(opts: {
     siteId = created.id;
   }
 
+  // Reuse an in-flight scan for the same site. This is a database-backed
+  // guard (not process memory), so separate serverless instances do not each
+  // open a browser session for the same domain. The queue's stale-run recovery
+  // closes anything older than 15 minutes.
+  const { data: running, error: runningError } = await supabase
+    .from("scans")
+    .select("slug, status, started_at")
+    .eq("site_id", siteId)
+    .eq("status", "running")
+    .gte("started_at", new Date(Date.now() - 15 * 60_000).toISOString())
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  assertDb(runningError, "Could not check for an active scan");
+  if (running) return { slug: running.slug, status: running.status, cached: true };
+
   const { data: scan, error: scanErr } = await supabase
     .from("scans")
     .insert({

@@ -16,6 +16,9 @@ describe("public report WebMCP summary", () => {
     expect(summarizeLiveWebMCP([
       { signal_key: "webmcp_registration", value_num: null, value_text: "runtime_witness_unavailable" },
     ])).toEqual({ liveCount: 0, measured: false });
+    expect(summarizeLiveWebMCP([
+      { signal_key: "webmcp_registration", value_num: null, value_text: "runtime_dependency_blocked" },
+    ])).toEqual({ liveCount: 0, measured: false });
   });
 
   it("fails safely for missing or malformed stored counts", () => {

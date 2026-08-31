@@ -105,6 +105,12 @@ export function matchSector(input: string): SectorEntry | null {
   );
 }
 
+/** Canonical display label shared by the homepage picker and corpus tables. */
+export function sectorLabel(slug: string | null): string {
+  if (slug == null) return "Unclassified";
+  return SECTOR_TAXONOMY.find((sector) => sector.slug === slug)?.label ?? slug.replace(/-/g, " ");
+}
+
 /** Friendly plural noun for a sector, for comparison copy. */
 export function sectorNoun(slug: string | null): string {
   switch (slug) {

@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
+import {
+  boundedWebMCPText,
+  normalizeWebMCPToolMetadata,
+  WEBMCP_ANNOTATIONS,
+  type WebMCPToolAnnotations,
+} from "@/lib/webmcp-tool-contract";
 
 /**
  * Registers this page's WebMCP tools (document.modelContext). Two surfaces:
@@ -54,7 +60,7 @@ const LADDER = [
   { rung: 4, name: "Transactable", definition: "An agent can complete a meaningful action end to end — book, order, submit — with human confirmation rather than human labour." },
 ];
 
-const text = (t: string) => ({ content: [{ type: "text", text: t }] });
+const text = boundedWebMCPText;
 
 const GATE_INSTRUCTION =
   "The full findings, timestamped evidence, and ranked recommendations are email-gated. " +
@@ -111,11 +117,12 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
       name: string;
       description: string;
       inputSchema: object;
-      annotations?: object;
+      annotations?: WebMCPToolAnnotations;
       execute: (args: Record<string, unknown>) => Promise<unknown> | unknown;
     }) => {
       const wrapped = {
           ...tool,
+          ...normalizeWebMCPToolMetadata(tool),
           execute: async (args: Record<string, unknown>) => {
             try {
               const result = await tool.execute(args ?? {});
@@ -160,6 +167,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
         properties: { url: { type: "string", description: "The website to scan, e.g. example.com" } },
         required: ["url"],
       },
+      annotations: WEBMCP_ANNOTATIONS.scan,
       execute: async ({ url }) => {
         const res = await fetch("/api/scan", {
           method: "POST",
@@ -186,6 +194,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
         type: "object",
         properties: { rung: { type: "number", description: "Optional rung 0-4" } },
       },
+      annotations: WEBMCP_ANNOTATIONS.localReadOnly,
       execute: ({ rung }) => {
         if (typeof rung === "number" && LADDER[rung])
           return text(`Rung ${rung} — ${LADDER[rung].name}: ${LADDER[rung].definition}`);
@@ -224,7 +233,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
         },
         required: scan ? ["email"] : ["email", "url"],
       },
-      annotations: { readOnly: false, consequential: true },
+      annotations: WEBMCP_ANNOTATIONS.sendEmail,
       execute: async ({ email, url, benchmark_updates }) => {
         let slug = scan?.slug;
         if (typeof url === "string" && url.trim()) {
@@ -266,6 +275,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
           ? `The findings of the scan currently on screen (${scan.domain}): rung, dimension scores, and ranked opportunities.`
           : `The public summary for ${scan.domain}. Full findings require the human to request the report by email.`,
         inputSchema: { type: "object", properties: {} },
+        annotations: WEBMCP_ANNOTATIONS.externalReadOnly,
         execute: () =>
           scan.unlocked
             ? text(
@@ -284,6 +294,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
           ? `The two strongest evidence-backed agent tools this scan recommends for ${scan.domain}, including inputs, outputs, human-confirmation requirements, value, effort and confidence.`
           : `Access the recommended agent tools for ${scan.domain}. This returns the email gate until the report is unlocked.`,
         inputSchema: { type: "object", properties: {} },
+        annotations: WEBMCP_ANNOTATIONS.externalReadOnly,
         execute: () => {
           if (!scan.unlocked) return text(GATE_INSTRUCTION);
           document.getElementById("tool-blueprint")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -307,11 +318,12 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
             signal_key: {
               type: "string",
               description: scan.unlocked
-                ? `One of: ${scan.signals.map((s) => s.key).join(", ")}`
+                ? "Optional signal key from the report. Omit it for a bounded summary of all findings."
                 : "Optional signal key. Signal names are included in the unlocked report.",
             },
           },
         },
+        annotations: WEBMCP_ANNOTATIONS.externalReadOnly,
         execute: ({ signal_key }) => {
           if (!scan.unlocked) return text(GATE_INSTRUCTION);
           if (signal_key) {
@@ -344,6 +356,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
           properties: { rank: { type: "number", description: "1, 2 or 3" } },
           required: ["rank"],
         },
+        annotations: WEBMCP_ANNOTATIONS.externalReadOnly,
         execute: ({ rank }) => {
           if (!scan.unlocked) return text(GATE_INSTRUCTION);
           const o = scan.opportunities.find((x) => x.rank === rank);
@@ -358,6 +371,7 @@ export default function WebMCPTools({ mode, scan }: { mode: "site" | "scan"; sca
         name: "rescan",
         description: `Run a fresh scan of ${scan.domain} now and reload this page with the new result. Use when the site has changed since ${scan.signals[0]?.observedAt ?? "the last scan"}.`,
         inputSchema: { type: "object", properties: {} },
+        annotations: WEBMCP_ANNOTATIONS.scan,
         execute: async () => {
           const res = await fetch("/api/scan", {
             method: "POST",

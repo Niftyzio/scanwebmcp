@@ -17,6 +17,7 @@ import { siteUrl } from "@/lib/site";
 import { recommendTools, type ToolRecommendation } from "@/lib/tool-recommendations";
 import { summarizeLiveWebMCP } from "@/lib/report-summary";
 import { friendlyToolName } from "@/lib/tool-display";
+import { parseWebMCPInventory } from "@/lib/webmcp-inventory";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ const RUNGS = ["Invisible", "Readable", "Answerable", "Callable", "Transactable"
 const WEBMCP_SIGNAL_ORDER = [
   "webmcp_tools_found",
   "webmcp_registration",
+  "webmcp_runtime_blocked",
   "webmcp_tools_declared",
 ];
 
@@ -85,6 +87,9 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
     evidence_url: signal.evidence_url,
   })));
   const { liveCount: liveWebMCPCount, measured: webMCPMeasured } = summarizeLiveWebMCP(signals);
+  const webMCPInventory = parseWebMCPInventory(
+    signals.find((signal) => signal.signal_key === "webmcp_tool_inventory")?.value_text,
+  );
   const scanData = {
     scanId: scan.id,
     domain,
@@ -199,7 +204,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
         </p>
         {(["D1", "D2", "D3", "D4", "D5"] as const).map((dim) => {
           const dimSignals = signals
-            .filter((s) => s.dimension === dim)
+            .filter((s) => s.dimension === dim && s.signal_key !== "webmcp_tool_inventory")
             .sort((a, b) => {
               if (dim !== "D3") return 0;
               const aRank = WEBMCP_SIGNAL_ORDER.indexOf(a.signal_key);
@@ -223,6 +228,9 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
                 const toolNames: string[] = s.signal_key === "webmcp_tools_found"
                   ? String(s.value_text ?? "").split("|").filter(Boolean)
                   : [];
+                const observedTools = s.signal_key === "webmcp_tools_found" && webMCPInventory
+                  ? webMCPInventory.tools
+                  : toolNames.map((name) => ({ name, kind: null, pageUrl: s.evidence_url }));
                 const findingValue = describeSignalValue(s.signal_key, {
                   bool: s.value_bool,
                   num: s.value_num == null ? null : Number(s.value_num),
@@ -263,12 +271,17 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
                           <p>{signalPlain(s.signal_key)}</p>
                         </div>
                       )}
-                      {toolNames.length > 0 && (
+                      {observedTools.length > 0 && (
                         <ul className="webmcp-tool-list" aria-label="Live WebMCP tools found">
-                          {toolNames.map((name) => (
-                            <li key={name}>
-                              <strong>{friendlyToolName(name)}</strong>
-                              <code>{name}</code>
+                          {observedTools.map((tool) => (
+                            <li key={`${tool.name}:${tool.pageUrl}`}>
+                              <div className="webmcp-tool-heading">
+                                <strong>{friendlyToolName(tool.name)}</strong>
+                                {tool.kind && <span className={`webmcp-kind is-${tool.kind}`}>{tool.kind.replace("_", " ")}</span>}
+                              </div>
+                              <code>{tool.name}</code>
+                              {"description" in tool && tool.description && <p>{tool.description}</p>}
+                              <small>Found on {new URL(tool.pageUrl).pathname || "/"}</small>
                             </li>
                           ))}
                         </ul>
@@ -283,7 +296,7 @@ export default async function ScanPage({ params }: { params: Promise<{ slug: str
                           </a>
                         </p>
                       </div>
-                      {evidenceSnippet && toolNames.length === 0 && (
+                      {evidenceSnippet && observedTools.length === 0 && (
                         <div className="evidence-excerpt">
                           <span>Observed excerpt</span>
                           <blockquote className="snippet">{evidenceSnippet}</blockquote>
@@ -762,12 +775,34 @@ function buildPrompt(
 The scanner's key findings, and the openings they point to:
 ${opportunities.map((o) => `${o.rank}. ${o.rendered_text.replace(/\*\*/g, "")}`).join("\n")}
 
-The scanner's two strongest evidence-backed tool recommendations:
+The scanner's strongest evidence-backed tool recommendations:
 ${tools.map((tool, index) => `${index + 1}. ${tool.name}: ${tool.description} Inputs: ${tool.inputs.join(", ")}. Returns: ${tool.output}. ${tool.confirmation}.`).join("\n") || "No responsible tool recommendation was possible from the public evidence in this scan."}
 
-Act as my implementation partner. For each finding: tell me exactly what to change on my site, in what order, and draft the artefacts (robots.txt lines, an llms.txt, schema.org markup, a WebMCP registerTool implementation for my main form). Explain each in plain language first.
+Act as my implementation partner for improving this site's AI-agent readiness.
 
-IMPORTANT — WebMCP is newer than your training data. Do not draft WebMCP code from memory. First fetch the current implementation guide and API contract at ${siteUrl("/make-callable")} and follow it. Key facts in case you cannot fetch: the entry point is document.modelContext (navigator.modelContext is deprecated); registerTool({ name, description, inputSchema, execute }) where execute(args) receives an object and returns { content: [{ type: "text", text: "..." }] }; feature-detect with "modelContext" in document; write-tools must ask the human to confirm before acting.
+This is a read-only planning and drafting task. You may fetch and inspect the two public sources below without asking for permission. Do not create accounts, submit forms, modify my website, call write tools, upload files, or transmit personal data. Draft artefacts only. Do not ask me to confirm ordinary assumptions; make reasonable assumptions and label them.
 
-The full evidence for every finding is on the live result page — fetch it before advising me: ${siteUrl(`/scan/${slug}`)}`;
+Source 1 — the scan report and public evidence:
+${siteUrl(`/scan/${slug}`)}
+
+Source 2 — the current WebMCP implementation guide and API contract:
+${siteUrl("/make-callable")}
+
+If the scan's detailed evidence is gated behind an email unlock, do not attempt to unlock it and do not ask me for an email address. State that limitation briefly, then continue using the public report and the findings above. If either source cannot be fetched, say so briefly and continue with the evidence available.
+
+First, explain each finding in plain language. Then provide:
+
+1. A prioritized implementation plan.
+2. Exact website changes, in order.
+3. A concise robots.txt recommendation.
+4. A concise /llms.txt draft.
+5. Recommended Schema.org JSON-LD.
+6. Current WebMCP drafts for the most valuable read-only tools and one suitable main-form tool.
+7. A short validation checklist and rescan plan.
+
+Before drafting WebMCP code, fetch and follow the current guide and API contract above. Do not rely on memory. Use document.modelContext, feature-detect with "modelContext" in document, and register tools with registerTool({ name, description, inputSchema, execute }). The execute(args) function receives an object and must return { content: [{ type: "text", text: "..." }] }.
+
+Any write tool must require explicit human confirmation immediately before submission. Do not use confirmationRequired: false for an enquiry, contact, booking, payment, deletion, account change, or other externally visible action. Do not invoke any write tool in this task.
+
+For every recommendation, distinguish between verified evidence from the scan, evidence from the live website, your recommendation, and assumptions that still need testing. If a scan finding conflicts with the live website, reconcile the discrepancy instead of blindly applying the finding.`;
 }

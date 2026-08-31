@@ -28,6 +28,13 @@
 
 import { SCANNER_UA } from "./engine";
 import { resolvePublicHost, safeFetchText } from "./safe-http";
+import {
+  buildWebMCPInventory,
+  normalizeWebMCPTools,
+  type WebMCPContextObservation,
+  type WebMCPInventory,
+  type WebMCPToolDescriptor,
+} from "./webmcp-inventory";
 
 export interface WebMCPProbe {
   ok: boolean;
@@ -45,6 +52,11 @@ export interface WebMCPProbe {
   /** True only when the live registry was queryable or registrations were
    * actually emitted. A rendered page without either is unmeasured. */
   witnessAvailable: boolean;
+  inventory: WebMCPInventory;
+  /** Sanitized public script URLs that looked WebMCP-related but could not be
+   * loaded inside the hardened renderer. This makes an incomplete runtime an
+   * unmeasured result rather than a false zero. */
+  blockedRuntimeUrls: string[];
   renderer?: "firecrawl" | "playwright" | "playwright-remote";
   remoteProtocol?: "cdp" | "playwright";
   browserVersion?: string;
@@ -66,15 +78,22 @@ const RUNTIME_TOOLS_SCRIPT = `(async () => {
   try {
     const context = document.modelContext || navigator.modelContext;
     if (!context || typeof context.getTools !== "function") {
-      return JSON.stringify({ available: false, names: [] });
+      return JSON.stringify({ available: false, totalCount: 0, tools: [] });
     }
     const tools = await context.getTools();
+    const list = Array.from(tools || []);
     return JSON.stringify({
       available: true,
-      names: Array.from(tools || []).map((tool) => tool && tool.name).filter((name) => typeof name === "string").slice(0, 25),
+      totalCount: list.length,
+      tools: list.map((tool) => ({
+        name: tool && tool.name,
+        description: tool && tool.description,
+        inputSchema: tool && tool.inputSchema,
+        annotations: tool && tool.annotations,
+      })),
     });
   } catch (error) {
-    return JSON.stringify({ available: false, names: [], error: String(error) });
+    return JSON.stringify({ available: false, totalCount: 0, tools: [], error: String(error) });
   }
 })()`;
 
@@ -110,19 +129,29 @@ export function isWebMCPProbeRequestAllowed(
 export function interpretRuntimeToolSnapshot(raw: unknown): {
   available: boolean;
   names: string[];
+  totalCount: number;
+  tools: WebMCPToolDescriptor[];
 } {
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (!parsed || typeof parsed !== "object") return { available: false, names: [] };
-    const snapshot = parsed as { available?: unknown; names?: unknown };
+    if (!parsed || typeof parsed !== "object") return { available: false, names: [], totalCount: 0, tools: [] };
+    const snapshot = parsed as { available?: unknown; names?: unknown; totalCount?: unknown; tools?: unknown };
+    const tools = normalizeWebMCPTools(snapshot.tools);
+    const names = tools.length > 0
+      ? tools.map((tool) => tool.name)
+      : Array.isArray(snapshot.names)
+        ? [...new Set(snapshot.names.filter((name): name is string => typeof name === "string" && name.length > 0))]
+        : [];
     return {
       available: snapshot.available === true,
-      names: Array.isArray(snapshot.names)
-        ? [...new Set(snapshot.names.filter((name): name is string => typeof name === "string" && name.length > 0))].slice(0, 25)
-        : [],
+      names,
+      totalCount: typeof snapshot.totalCount === "number" && Number.isFinite(snapshot.totalCount)
+        ? Math.max(snapshot.totalCount, names.length)
+        : names.length,
+      tools: tools.length > 0 ? tools : names.map((name) => ({ name })),
     };
   } catch {
-    return { available: false, names: [] };
+    return { available: false, names: [], totalCount: 0, tools: [] };
   }
 }
 
@@ -134,8 +163,8 @@ export async function pollRuntimeToolRegistry(
   readSnapshot: () => Promise<unknown>,
   wait: (milliseconds: number) => Promise<void>,
   attempts = 8,
-): Promise<{ available: boolean; names: string[] }> {
-  let latest = { available: false, names: [] as string[] };
+): Promise<{ available: boolean; names: string[]; totalCount: number; tools: WebMCPToolDescriptor[] }> {
+  let latest = { available: false, names: [] as string[], totalCount: 0, tools: [] as WebMCPToolDescriptor[] };
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const current = interpretRuntimeToolSnapshot(
       await readSnapshot().catch(() => undefined),
@@ -147,6 +176,7 @@ export async function pollRuntimeToolRegistry(
 }
 
 function probeFailure(error: string, renderer?: WebMCPProbe["renderer"]): WebMCPProbe {
+  const inventory = buildWebMCPInventory([], new Map());
   return {
     ok: false,
     activeToolNames: [],
@@ -156,6 +186,8 @@ function probeFailure(error: string, renderer?: WebMCPProbe["renderer"]): WebMCP
     protocolDomainAvailable: false,
     runtimeRegistryAvailable: false,
     witnessAvailable: false,
+    inventory,
+    blockedRuntimeUrls: [],
     renderer,
     error,
   };
@@ -191,6 +223,8 @@ function interpretProbe(
     protocolDomainAvailable: false,
     runtimeRegistryAvailable: false,
     witnessAvailable: false,
+    inventory: buildWebMCPInventory([], new Map()),
+    blockedRuntimeUrls: [],
     renderer,
   };
 }
@@ -210,7 +244,9 @@ export function classifyWebMCPProbe(probe: WebMCPProbe): {
   }
   if (!probe.witnessAvailable) {
     return {
-      verdict: probe.declaredToolNames.length > 0
+      verdict: probe.blockedRuntimeUrls.length > 0
+        ? "runtime_dependency_blocked"
+        : probe.declaredToolNames.length > 0
         ? "runtime_witness_unavailable_manifest_declared"
         : probe.registrationCodeDetected
           ? "runtime_witness_unavailable_code_detected"
@@ -359,7 +395,41 @@ function remoteBrowserEndpoint(): string | undefined {
   return base ? withWebMCPLaunchOptions(browserlessCDPEndpoint(base)) : undefined;
 }
 
-async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
+export function isPotentialWebMCPRuntimeUrl(requestUrl: string, resourceType?: string): boolean {
+  if (resourceType?.toLowerCase() !== "script") return false;
+  try {
+    const url = new URL(requestUrl);
+    return url.protocol === "https:" && /(?:webmcp|model[-_.]?context|standard[-_.]?actions|origin[-_.]?trials)/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function publicEvidenceUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return value.slice(0, 500);
+  }
+}
+
+const RUNTIME_SCRIPT_SIGNATURE = /(?:modelContext|registerTool|WebMCP|webmcp)/i;
+
+async function fetchPotentialRuntimeScript(url: string): Promise<string | null> {
+  const response = await safeFetchText(url, {
+    method: "GET",
+    headers: { "User-Agent": SCANNER_UA, Accept: "text/javascript, application/javascript, */*;q=0.1" },
+    timeoutMs: 5_000,
+    maxBodyBytes: 500_000,
+  });
+  if (!response.ok || !RUNTIME_SCRIPT_SIGNATURE.test(response.body)) return null;
+  return response.body;
+}
+
+async function probeViaPlaywright(urls: string[]): Promise<WebMCPProbe> {
   // playwright-core carries all client logic: locally it launches the
   // browsers `npx playwright install` downloaded; in serverless (no browser
   // binaries) only the remote-connect path can succeed. Dynamic import so a
@@ -384,7 +454,7 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
         ? await chromium.connect(endpoint, { timeout: 10_000 })
         : await chromium.connectOverCDP(endpoint, { timeout: 10_000 })
       : await (async () => {
-          const resolved = await resolvePublicHost(url);
+          const resolved = await resolvePublicHost(urls[0]);
           const resolverRule = `--host-resolver-rules=MAP ${resolved.url.hostname} ${resolved.address}, EXCLUDE localhost`;
           return chromium.launch({ headless: true, args: [...WEBMCP_LAUNCH_ARGS, resolverRule], timeout: 10_000 });
         })();
@@ -393,9 +463,12 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
       ? await remoteContext.newPage()
       : await browser.newPage({ userAgent: SCANNER_UA });
 
-    const cdpTools: string[] = [];
+    let cdpTools: WebMCPToolDescriptor[] = [];
     let protocolDomainAvailable = false;
-    const targetOrigin = new URL(url).origin;
+    let targetOrigin = new URL(urls[0]).origin;
+    const blockedRuntimeUrls = new Set<string>();
+    const runtimeScriptCache = new Map<string, string | null>();
+    let externalRuntimeBudget = 3;
     let cdp: import("playwright-core").CDPSession | undefined;
     try {
       cdp = await page.context().newCDPSession(page);
@@ -408,13 +481,35 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
       // the protocol Fetch domain instead so the SSRF boundary remains intact.
       await cdp.send("Network.setUserAgentOverride", { userAgent: SCANNER_UA });
       cdp.on("Fetch.requestPaused", (event) => {
-        const action = isWebMCPProbeRequestAllowed(event.request.url, targetOrigin, event.resourceType)
-          ? cdp?.send("Fetch.continueRequest", { requestId: event.requestId })
-          : cdp?.send("Fetch.failRequest", {
-              requestId: event.requestId,
-              errorReason: "BlockedByClient",
-            });
-        void action?.catch(() => undefined);
+        void (async () => {
+          if (isWebMCPProbeRequestAllowed(event.request.url, targetOrigin, event.resourceType)) {
+            await cdp?.send("Fetch.continueRequest", { requestId: event.requestId });
+            return;
+          }
+          if (isPotentialWebMCPRuntimeUrl(event.request.url, event.resourceType)) {
+            const evidenceUrl = publicEvidenceUrl(event.request.url);
+            let body = runtimeScriptCache.get(evidenceUrl);
+            if (body === undefined && externalRuntimeBudget > 0) {
+              externalRuntimeBudget -= 1;
+              body = await fetchPotentialRuntimeScript(event.request.url);
+              runtimeScriptCache.set(evidenceUrl, body);
+            }
+            if (body) {
+              await cdp?.send("Fetch.fulfillRequest", {
+                requestId: event.requestId,
+                responseCode: 200,
+                responseHeaders: [{ name: "Content-Type", value: "application/javascript; charset=utf-8" }],
+                body: Buffer.from(body).toString("base64"),
+              });
+              return;
+            }
+            blockedRuntimeUrls.add(evidenceUrl);
+          }
+          await cdp?.send("Fetch.failRequest", { requestId: event.requestId, errorReason: "BlockedByClient" });
+        })().catch(() => cdp?.send("Fetch.failRequest", {
+          requestId: event.requestId,
+          errorReason: "BlockedByClient",
+        }).catch(() => undefined));
       });
       await cdp.send("Fetch.enable", { patterns: [{ urlPattern: "*" }] });
     } else {
@@ -424,6 +519,17 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
           targetOrigin,
           route.request().resourceType(),
         )) return route.continue();
+        if (isPotentialWebMCPRuntimeUrl(route.request().url(), route.request().resourceType())) {
+          const evidenceUrl = publicEvidenceUrl(route.request().url());
+          let body = runtimeScriptCache.get(evidenceUrl);
+          if (body === undefined && externalRuntimeBudget > 0) {
+            externalRuntimeBudget -= 1;
+            body = await fetchPotentialRuntimeScript(route.request().url());
+            runtimeScriptCache.set(evidenceUrl, body);
+          }
+          if (body) return route.fulfill({ status: 200, contentType: "application/javascript; charset=utf-8", body });
+          blockedRuntimeUrls.add(evidenceUrl);
+        }
         await route.abort("blockedbyclient");
       });
     }
@@ -433,9 +539,7 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
       cdp.on(
         "WebMCP.toolsAdded" as Parameters<typeof cdp.on>[0],
         (e) => {
-          for (const t of (e as { tools?: { name?: unknown }[] }).tools ?? []) {
-            if (typeof t.name === "string") cdpTools.push(t.name);
-          }
+          cdpTools.push(...normalizeWebMCPTools((e as { tools?: unknown[] }).tools));
         },
       );
       await cdp.send("WebMCP.enable" as Parameters<typeof cdp.send>[0]);
@@ -444,41 +548,84 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
       /* older Chromium without the WebMCP domain — DOM-level detection still runs */
     }
 
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 12_000 });
-    // Tool adapters can arrive after DOM ready (Shopify injects its adapter
-    // from a CDN). Poll the live registry for a bounded window instead of
-    // taking a single early snapshot and permanently recording a false zero.
-    await page.waitForTimeout(1_000);
-    const runtimeSnapshot = await pollRuntimeToolRegistry(
-      () => page.evaluate(RUNTIME_TOOLS_SCRIPT),
-      (milliseconds) => page.waitForTimeout(milliseconds),
-    );
-    const raw = await page.evaluate(PROBE_SCRIPT);
-    const html = await page.content();
-    const probe = interpretProbe(raw, html, endpoint ? "playwright-remote" : "playwright");
-    const observedTools = [...new Set([...cdpTools, ...runtimeSnapshot.names])].slice(0, 25);
-    probe.protocolDomainAvailable = protocolDomainAvailable;
-    probe.runtimeRegistryAvailable = runtimeSnapshot.available;
-    probe.witnessAvailable = cdpTools.length > 0 || runtimeSnapshot.available;
-    probe.remoteProtocol = remoteProtocol;
-    probe.browserVersion = browser.version();
-    if (observedTools.length > 0) {
-      // Live registrations observed against a real modelContext: report those
-      // names and mark the context active.
-      probe.activeToolNames = observedTools;
-      probe.modelContextPresent = true;
-    } else if (probe.witnessAvailable) {
-      // A runtime API was available, but its registry was empty. Mere context
-      // presence proves nothing — only discovered registrations count active.
-      probe.modelContextPresent = false;
+    const contexts: WebMCPContextObservation[] = [];
+    const descriptorsByContext = new Map<string, WebMCPToolDescriptor[]>();
+    const declaredToolNames = new Set<string>();
+    let registrationCodeDetected = false;
+    let modelContextPresent = false;
+    let runtimeRegistryAvailable = false;
+    let witnessAvailable = false;
+    const deadline = Date.now() + 28_000;
+
+    for (let index = 0; index < urls.length && Date.now() < deadline; index += 1) {
+      const requestedUrl = urls[index];
+      targetOrigin = new URL(requestedUrl).origin;
+      cdpTools = [];
+      try {
+        await page.goto(requestedUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: Math.min(10_000, Math.max(1_000, deadline - Date.now())),
+        });
+        await page.waitForTimeout(Math.min(750, Math.max(0, deadline - Date.now())));
+        const runtimeSnapshot = await pollRuntimeToolRegistry(
+          () => page.evaluate(RUNTIME_TOOLS_SCRIPT),
+          (milliseconds) => page.waitForTimeout(Math.min(milliseconds, Math.max(0, deadline - Date.now()))),
+          index === 0 ? 8 : 4,
+        );
+        const raw = await page.evaluate(PROBE_SCRIPT);
+        const html = await page.content();
+        const perPage = interpretProbe(raw, html, endpoint ? "playwright-remote" : "playwright");
+        for (const name of perPage.declaredToolNames) declaredToolNames.add(name);
+        registrationCodeDetected ||= perPage.registrationCodeDetected;
+        modelContextPresent ||= perPage.modelContextPresent;
+        runtimeRegistryAvailable ||= runtimeSnapshot.available;
+        const contextWitness = cdpTools.length > 0 || runtimeSnapshot.available;
+        witnessAvailable ||= contextWitness;
+        const descriptors = normalizeWebMCPTools([...runtimeSnapshot.tools, ...cdpTools]);
+        const finalUrl = page.url();
+        descriptorsByContext.set(finalUrl, descriptors);
+        contexts.push({
+          requestedUrl,
+          finalUrl,
+          toolCount: Math.max(runtimeSnapshot.totalCount, descriptors.length),
+          toolNames: descriptors.map((tool) => tool.name),
+          witnessAvailable: contextWitness,
+        });
+      } catch (error) {
+        contexts.push({ requestedUrl, finalUrl: page.url() || requestedUrl, toolCount: 0, toolNames: [], witnessAvailable: false });
+        console.warn(`[render] webmcp_context_failed ${JSON.stringify({
+          url: publicEvidenceUrl(requestedUrl),
+          error: error instanceof Error ? error.message.split("\n")[0] : String(error),
+        })}`);
+      }
     }
+
+    const inventory = buildWebMCPInventory(contexts, descriptorsByContext, [...blockedRuntimeUrls]);
+    const probe: WebMCPProbe = {
+      ok: true,
+      activeToolNames: inventory.tools.map((tool) => tool.name),
+      declaredToolNames: [...declaredToolNames],
+      registrationCodeDetected,
+      modelContextPresent: inventory.totalCount > 0 || modelContextPresent,
+      protocolDomainAvailable,
+      runtimeRegistryAvailable,
+      witnessAvailable,
+      inventory,
+      blockedRuntimeUrls: [...blockedRuntimeUrls],
+      renderer: endpoint ? "playwright-remote" : "playwright",
+      remoteProtocol,
+      browserVersion: browser.version(),
+    };
     console.info(`[render] webmcp_probe ${JSON.stringify({
       renderer: probe.renderer,
       remoteProtocol,
       browserVersion: probe.browserVersion,
       protocolDomainAvailable,
-      runtimeRegistryAvailable: runtimeSnapshot.available,
-      observedToolCount: observedTools.length,
+      runtimeRegistryAvailable,
+      observedToolCount: inventory.totalCount,
+      contextsScanned: contexts.length,
+      contextDependent: inventory.contextDependent,
+      blockedRuntimeCount: blockedRuntimeUrls.size,
       declaredToolCount: probe.declaredToolNames.length,
       witnessAvailable: probe.witnessAvailable,
     })}`);
@@ -490,23 +637,27 @@ async function probeViaPlaywright(url: string): Promise<WebMCPProbe> {
   }
 }
 
-export async function probeWebMCP(url: string): Promise<WebMCPProbe> {
+export async function probeWebMCP(input: string | string[]): Promise<WebMCPProbe> {
   // Resolve redirects through the hardened HTTP client first. The renderer is
   // only ever given a public final URL, and local Chromium pins that hostname.
-  const canonical = await safeFetchText(url, {
-    method: "GET",
-    headers: { "User-Agent": SCANNER_UA },
-    timeoutMs: 8_000,
-    maxBodyBytes: 32_000,
-  });
-  if (canonical.error) return probeFailure(`preflight:${canonical.error}`);
-  const playwright = await probeViaPlaywright(canonical.finalUrl);
+  const requested = [...new Set(Array.isArray(input) ? input : [input])].slice(0, 4);
+  const preflights = await Promise.all(requested.map((url) => safeFetchText(url, {
+      method: "GET",
+      headers: { "User-Agent": SCANNER_UA },
+      timeoutMs: 8_000,
+      maxBodyBytes: 32_000,
+    })));
+  const canonicalUrls = [...new Set(preflights.filter((result) => !result.error).map((result) => result.finalUrl))];
+  if (canonicalUrls.length === 0) {
+    return probeFailure(`preflight:${preflights.map((result) => result.error ?? `http_${result.status}`).join("+")}`);
+  }
+  const playwright = await probeViaPlaywright(canonicalUrls);
   if (playwright.ok) return playwright;
   // Surface the reason in ops logs — a scan that silently degrades to
   // Firecrawl hides remote-browser misconfiguration otherwise.
   console.warn(`[render] playwright probe unavailable (${playwright.error}); falling back to firecrawl`);
 
-  const firecrawl = await probeViaFirecrawl(canonical.finalUrl);
+  const firecrawl = await probeViaFirecrawl(canonicalUrls[0]);
   if (firecrawl.ok) return firecrawl;
 
   // Both failed — surface both errors so the stored signal says exactly why.

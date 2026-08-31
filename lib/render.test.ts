@@ -3,12 +3,14 @@ import {
   browserlessCDPEndpoint,
   classifyWebMCPProbe,
   interpretRuntimeToolSnapshot,
+  isPotentialWebMCPRuntimeUrl,
   isWebMCPProbeRequestAllowed,
   pollRuntimeToolRegistry,
   remoteBrowserProtocol,
   withWebMCPLaunchOptions,
   type WebMCPProbe,
 } from "./render";
+import { buildWebMCPInventory } from "./webmcp-inventory";
 
 const probe = (partial: Partial<WebMCPProbe> = {}): WebMCPProbe => ({
   ok: true,
@@ -19,6 +21,8 @@ const probe = (partial: Partial<WebMCPProbe> = {}): WebMCPProbe => ({
   protocolDomainAvailable: false,
   runtimeRegistryAvailable: false,
   witnessAvailable: false,
+  inventory: buildWebMCPInventory([], new Map()),
+  blockedRuntimeUrls: [],
   renderer: "playwright-remote",
   ...partial,
 });
@@ -60,6 +64,15 @@ describe("WebMCP runtime evidence", () => {
     }))).toEqual({
       verdict: "active_tools_found",
       valueBool: true,
+    });
+  });
+
+  it("does not turn a blocked WebMCP runtime into a false zero", () => {
+    expect(classifyWebMCPProbe(probe({
+      blockedRuntimeUrls: ["https://static.example/webmcp/runtime.js"],
+    }))).toEqual({
+      verdict: "runtime_dependency_blocked",
+      valueBool: undefined,
     });
   });
 });
@@ -137,6 +150,8 @@ describe("WebMCP runtime tool discovery", () => {
     }))).toEqual({
       available: true,
       names: ["search_site", "book_appointment"],
+      totalCount: 2,
+      tools: [{ name: "search_site" }, { name: "book_appointment" }],
     });
   });
 
@@ -144,6 +159,8 @@ describe("WebMCP runtime tool discovery", () => {
     expect(interpretRuntimeToolSnapshot("not-json")).toEqual({
       available: false,
       names: [],
+      totalCount: 0,
+      tools: [],
     });
   });
 
@@ -159,9 +176,25 @@ describe("WebMCP runtime tool discovery", () => {
       async (milliseconds) => { waits.push(milliseconds); },
     );
 
-    expect(result).toEqual({ available: true, names: six });
+    expect(result).toEqual({
+      available: true,
+      names: six,
+      totalCount: 6,
+      tools: six.map((name) => ({ name })),
+    });
     expect(reads).toBe(8);
     expect(waits).toEqual(Array(7).fill(500));
+  });
+
+  it("does not truncate a registry at 25 tools", () => {
+    const tools = Array.from({ length: 40 }, (_, index) => ({
+      name: `tool_${index + 1}`,
+      description: `Tool ${index + 1}`,
+    }));
+    const snapshot = interpretRuntimeToolSnapshot(JSON.stringify({ available: true, totalCount: 40, tools }));
+    expect(snapshot.totalCount).toBe(40);
+    expect(snapshot.tools).toHaveLength(40);
+    expect(snapshot.names.at(-1)).toBe("tool_40");
   });
 });
 
@@ -200,5 +233,11 @@ describe("WebMCP renderer request policy", () => {
   it("allows all resources from the already validated target origin", () => {
     expect(isWebMCPProbeRequestAllowed(`${origin}/assets/app.js`, origin, "Script")).toBe(true);
     expect(isWebMCPProbeRequestAllowed(`${origin}/api/catalog`, origin, "Fetch")).toBe(true);
+  });
+
+  it("recognises cross-origin WebMCP-looking scripts without treating arbitrary scripts as runtimes", () => {
+    expect(isPotentialWebMCPRuntimeUrl("https://static.example/webmcp/runtime.js?token=secret", "script")).toBe(true);
+    expect(isPotentialWebMCPRuntimeUrl("https://static.example/assets/app.js", "script")).toBe(false);
+    expect(isPotentialWebMCPRuntimeUrl("https://static.example/webmcp/runtime.js", "fetch")).toBe(false);
   });
 });

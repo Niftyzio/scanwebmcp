@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { getCorpusCounts } from "@/lib/benchmark";
+import { getObservatorySnapshot } from "@/lib/benchmark";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
   try {
-    const counts = await getCorpusCounts();
-    return NextResponse.json(counts, {
+    const snapshot = await getObservatorySnapshot();
+    return NextResponse.json(snapshot, {
       headers: {
         // Near-live for visitors, shared briefly at the edge so an open page
         // does not turn into a database query per visitor every 30 seconds.
@@ -15,11 +15,11 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("observatory_counts_failed", {
+    console.error("observatory_snapshot_failed", {
       message: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Live corpus counts are temporarily unavailable." },
+      { error: "Live Observatory data is temporarily unavailable." },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
