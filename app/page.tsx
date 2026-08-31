@@ -6,12 +6,22 @@ import AgentAccessConstellation from "@/components/AgentAccessConstellation";
 import LiveCorpusCounter from "@/components/LiveCorpusCounter";
 import { getCorpusCounts, getObservatoryStats, type ObservatoryStats } from "@/lib/benchmark";
 import Image from "next/image";
+import type { Metadata } from "next";
 
 export const revalidate = 300;
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+    types: { "text/markdown": "/index.md" },
+  },
+};
 
 const RUNGS = ["Invisible", "Readable", "Answerable", "Callable", "Transactable"];
 
-export default async function Home() {
+export default async function Home({ searchParams }: PageProps<"/">) {
+  const mode = (await searchParams).mode;
+  if (mode === "agent") return <AgentMode />;
+
   const stats = await getObservatoryStats().catch(() => null);
   const counts = stats ?? await getCorpusCounts().catch(() => null);
 
@@ -66,6 +76,38 @@ export default async function Home() {
       </section>
       <FeatureShowcase stats={stats} />
       <div className="home-recent"><RecentScans /></div>
+    </main>
+  );
+}
+
+function AgentMode() {
+  return (
+    <main className="wrap article editorial-page" data-agent-view="true">
+      <h1>ScanWebMCP.com agent interface</h1>
+      <p>
+        Scan a public website and receive a dated Agent Surface Ladder result describing what AI
+        agents can read, answer, and call. The service is free and requires no API key.
+      </p>
+      <h2>Preferred interfaces</h2>
+      <ul>
+        <li><a href="/openapi.json">OpenAPI 3.1</a> — typed REST operations and error schemas.</li>
+        <li><a href="/mcp">MCP server</a> — Streamable HTTP tools at <code>/mcp</code>.</li>
+        <li><a href="/skills/scan-webmcp/SKILL.md">Agent skill</a> — when-to-use and interpretation guidance.</li>
+        <li><a href="/developers">Developer portal</a> — quickstart, limits, sandbox, and safety rules.</li>
+      </ul>
+      <h2>REST workflow</h2>
+      <ol>
+        <li>POST JSON <code>&#123;&quot;url&quot;:&quot;example.com&quot;,&quot;requester&quot;:&quot;agent&quot;&#125;</code> to <code>/api/scan</code>.</li>
+        <li>Read the returned <code>slug</code>, <code>status</code>, cache status, and timestamps.</li>
+        <li>GET <code>/api/scan/&#123;slug&#125;</code> for the public rung and dimension scores.</li>
+      </ol>
+      <h2>Constraints</h2>
+      <p>
+        The scanner fetches public pages only, honours robots.txt, refuses private network targets,
+        and rate-limits repeated scans. Exact signals and evidence are email-gated; never guess or
+        auto-fill an address. Authentication: none. Public sandbox target: <code>example.com</code>.
+      </p>
+      <p><a href="/llms.txt">Full machine-readable site index</a></p>
     </main>
   );
 }

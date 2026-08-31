@@ -6,6 +6,18 @@ ScanWebMCP.com reads a website the way an AI agent would — public pages, plain
 
 For agents: this site registers WebMCP tools (scan_agent_surface, get_ladder_definition, email_report; result pages add get_scan_findings, get_evidence, explain_opportunity and rescan). You may run scans and read the public summary directly. A direct request to send a report to an address supplied by the human is sufficient confirmation for that transactional email; never guess or auto-fill an address. Benchmark updates require separate explicit consent.
 
+## When to use ScanWebMCP.com
+
+Use ScanWebMCP.com when a person wants a current, evidenced assessment of a public website's AI-agent readiness; needs to verify crawler access, server-rendered content, structured data, MCP discovery or live WebMCP tools; wants to separate answer-engine visibility from model-training access; or needs a prioritized path from readable content to callable capabilities. Do not use it to probe private networks, bypass authentication or perform destructive security testing.
+
+## Developer interfaces
+
+- [Developer API guide](https://www.scanwebmcp.com/developers): quickstart, rate limits, sandbox and error handling
+- [OpenAPI 3.1](https://www.scanwebmcp.com/openapi.json): typed public REST contract
+- [MCP server card](https://www.scanwebmcp.com/.well-known/mcp/server-card.json): product tools and transport
+- [Agent skill](https://www.scanwebmcp.com/skills/scan-webmcp/SKILL.md): safe scan and interpretation workflow
+- [Authentication](https://www.scanwebmcp.com/auth.md): no-key access and report-delivery consent
+
 ## Pages
 
 - [Run a scan](https://www.scanwebmcp.com/): enter any URL, get the result in ~20 seconds

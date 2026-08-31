@@ -1,0 +1,50 @@
+{
+  "name": "agent-surface-scan",
+  "version": "1.0.0",
+  "description": "Scan public websites for what AI agents can read, answer, and call.",
+  "author": {
+    "name": "Sara Simeone",
+    "email": "sara@nocodelab.ai",
+    "url": "https://www.linkedin.com/in/sarasimeone/"
+  },
+  "homepage": "https://www.scanwebmcp.com/developers",
+  "repository": "https://github.com/Niftyzio/scanwebmcp",
+  "license": "AGPL-3.0-only",
+  "keywords": [
+    "agent-readiness",
+    "mcp",
+    "webmcp",
+    "website-scanner"
+  ],
+  "skills": "./skills/",
+  "mcpServers": {
+    "scanwebmcp": {
+      "type": "http",
+      "url": "https://www.scanwebmcp.com/mcp"
+    },
+    "scanwebmcp-docs": {
+      "type": "http",
+      "url": "https://www.scanwebmcp.com/mcp/docs"
+    }
+  },
+  "interface": {
+    "displayName": "ScanWebMCP.com",
+    "shortDescription": "See what AI agents can read, answer, and call.",
+    "longDescription": "Scan a public website against the Agent Surface Ladder, read its evidenced public result, and request the full report with explicit human consent.",
+    "developerName": "Sara Simeone",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Website scanning",
+      "Agent-readiness assessment",
+      "MCP"
+    ],
+    "websiteURL": "https://www.scanwebmcp.com/",
+    "privacyPolicyURL": "https://www.scanwebmcp.com/privacy",
+    "defaultPrompt": [
+      "Scan my website for agent readiness.",
+      "Check whether this site is callable by AI agents.",
+      "Explain this ScanWebMCP result."
+    ],
+    "brandColor": "#0A2540"
+  }
+}
