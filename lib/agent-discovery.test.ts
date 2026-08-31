@@ -8,6 +8,7 @@ import {
   MCP_SERVER_CARD,
   OPENAPI_DOCUMENT,
 } from "./agent-discovery";
+import { SITE_ORIGIN } from "./site";
 
 describe("agent discovery documents", () => {
   it("publishes self-describing OpenAPI operations with unique IDs", () => {
@@ -27,7 +28,7 @@ describe("agent discovery documents", () => {
       expect(entry.identifier).toMatch(/^urn:air:scanwebmcp\.com:/);
       expect(entry.displayName).toBeTruthy();
       expect(entry.type).toContain("/");
-      expect(new URL(entry.url).hostname).toBe("www.scanwebmcp.com");
+      expect(new URL(entry.url).origin).toBe(SITE_ORIGIN);
     }
   });
 
@@ -43,7 +44,7 @@ describe("agent discovery documents", () => {
 
   it("links the API catalog and MCP card to live product surfaces", () => {
     expect(API_CATALOG.linkset[0].item.some((item) => item.href.endsWith("/api/scan"))).toBe(true);
-    expect(MCP_SERVER_CARD.serverUrl).toBe("https://www.scanwebmcp.com/mcp");
+    expect(MCP_SERVER_CARD.serverUrl).toBe(`${SITE_ORIGIN}/mcp`);
     expect(MCP_SERVER_CARD.tools.map((tool) => tool.name)).toEqual([
       "scan_agent_surface",
       "get_ladder_definition",

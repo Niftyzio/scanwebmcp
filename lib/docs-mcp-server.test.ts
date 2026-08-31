@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { handleDocsMcpRequest } from "./docs-mcp-server";
+import { SITE_ORIGIN } from "./site";
 
 async function rpc(method: string, params?: Record<string, unknown>) {
   const response = handleDocsMcpRequest({ jsonrpc: "2.0", id: 1, method, params });
@@ -24,7 +25,7 @@ describe("documentation MCP server", () => {
       arguments: { query: "API authentication" },
     });
     expect(body.result.isError).not.toBe(true);
-    expect(body.result.content[0].text).toContain("https://www.scanwebmcp.com/");
+    expect(body.result.content[0].text).toContain(`${SITE_ORIGIN}/`);
     expect(body.result.structuredContent.results.length).toBeGreaterThan(0);
   });
 
