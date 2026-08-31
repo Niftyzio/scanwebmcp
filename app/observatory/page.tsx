@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getObservatoryStats } from "@/lib/benchmark";
 import WebMCPTools from "@/components/WebMCPTools";
 import LiveObservatoryCorpus from "@/components/LiveObservatoryCorpus";
+import { getShopifyWebMCPCohortStats } from "@/lib/shopify-webmcp-cohort";
 
 export const metadata: Metadata = {
   title: "The Agent Surface Observatory",
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const RUNGS = ["Invisible", "Readable", "Answerable", "Callable", "Transactable"];
+const shopifyCohort = getShopifyWebMCPCohortStats();
 
 export default async function Observatory() {
   const s = await getObservatoryStats();
@@ -58,6 +60,20 @@ export default async function Observatory() {
           })}
         </div>
       </LiveObservatoryCorpus>
+
+      <section className="observatory-field-note">
+        <p className="kicker">Field note · Shopify WebMCP</p>
+        <div>
+          <strong>{shopifyCohort.productionVerified}/{shopifyCohort.total}</strong>
+          <h2>Known-positive storefronts independently verified in production</h2>
+          <p>
+            In a deliberately selected six-store validation cohort, five exposed a live WebMCP registry
+            to the production scanner. Local Chrome verified 14 tools on the sixth. This measures scanner
+            coverage, not Shopify-wide adoption.
+          </p>
+          <a href="/case-study/shopify-webmcp">Read the Shopify WebMCP field study →</a>
+        </div>
+      </section>
 
       <section className="cta">
         <h2>Where does your site stand?</h2>

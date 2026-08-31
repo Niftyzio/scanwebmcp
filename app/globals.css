@@ -319,6 +319,35 @@ body:has(.editorial-page) .site-footer { width: min(78rem, calc(100% - 3rem)); m
 .editorial-observatory .stat-num { display: block; margin-bottom: 0.65rem; color: var(--accent-strong); font-size: 2.6rem; font-weight: 480; }
 .editorial-observatory .dist { padding: 1.4rem; background: rgba(35,31,28,0.64); border: 1px solid rgba(255,238,224,0.09); border-radius: 1rem; }
 .editorial-observatory .dist-bar { background: linear-gradient(90deg, #8b4f31, #d38b5e); }
+.observatory-field-note { margin: 5rem 0 0; padding: 1.6rem; background: linear-gradient(135deg, rgba(46,40,35,0.88), rgba(28,25,23,0.94)); border: 1px solid rgba(224,160,119,0.2); border-radius: 1.2rem; }
+.editorial-page .observatory-field-note h2 { margin: 0.35rem 0 0.8rem; padding: 0; border: 0; }
+.observatory-field-note > .kicker { margin-bottom: 1rem; color: var(--accent-strong); font-size: 0.67rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.observatory-field-note > div > strong { float: right; margin: 0 0 1rem 1.5rem; color: var(--accent-strong); font-size: clamp(3.4rem, 8vw, 6.2rem); font-weight: 470; line-height: 0.85; letter-spacing: -0.08em; }
+.observatory-field-note p { max-width: 48rem; }
+.editorial-shopify-study { width: min(68rem, calc(100% - 3rem)); }
+.shopify-study-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin: -1.6rem 0 2rem; }
+.shopify-study-metrics > div { min-height: 9rem; padding: 1.25rem; background: linear-gradient(145deg, rgba(46,40,35,0.84), rgba(28,25,23,0.92)); border: 1px solid rgba(255,238,224,0.1); border-radius: 1rem; }
+.shopify-study-metrics strong { display: block; margin-bottom: 0.55rem; color: var(--accent-strong); font-size: clamp(2.8rem, 7vw, 4.5rem); font-weight: 470; line-height: 0.9; letter-spacing: -0.07em; }
+.shopify-study-metrics span { color: #c8bfb6; font-size: 0.86rem; }
+.study-scope-note { margin: 2rem 0 4.8rem; padding: 1.2rem 1.35rem; color: #c8bfb6; background: rgba(224,160,119,0.055); border: 1px solid rgba(224,160,119,0.18); border-left: 3px solid var(--accent); border-radius: 0.2rem 0.85rem 0.85rem 0.2rem; }
+.study-scope-note strong { display: block; margin-bottom: 0.35rem; }
+.shopify-tool-groups { display: grid; gap: 0.75rem; margin: 1.8rem 0 3rem; }
+.shopify-tool-group { display: grid; grid-template-columns: 9rem 1fr; gap: 1rem; align-items: start; padding: 1rem 1.1rem; background: rgba(35,31,28,0.68); border: 1px solid rgba(255,238,224,0.09); border-radius: 0.9rem; }
+.shopify-tool-group > span { color: var(--accent-strong); font-family: var(--mono); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.shopify-tool-group > div, .custom-tool-strip { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.shopify-tool-group code, .custom-tool-strip code { padding: 0.28rem 0.48rem; font-size: 0.75rem; }
+.agent-journey { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin: 2rem 0 1.2rem; padding: 0; list-style: none; counter-reset: none; }
+.editorial-page .agent-journey li { position: relative; margin: 0; padding: 0 0.8rem 0 0; }
+.agent-journey li::after { content: "→"; position: absolute; top: 0.15rem; right: 0.18rem; color: rgba(224,160,119,0.5); }
+.agent-journey li:last-child::after { display: none; }
+.agent-journey li > span { display: block; margin-bottom: 1rem; color: rgba(224,160,119,0.6); font-family: var(--mono); font-size: 0.68rem; }
+.agent-journey code { display: inline-block; margin-bottom: 0.65rem; font-size: 0.72rem; }
+.agent-journey p { margin: 0; color: #aaa098; font-size: 0.82rem; line-height: 1.5; }
+.study-method-note { padding-left: 1rem; border-left: 2px solid rgba(224,160,119,0.35); color: #aaa098 !important; font-size: 0.86rem; }
+.shopify-cohort-table { overflow-x: auto; }
+.editorial-page .shopify-cohort-table table { min-width: 46rem; }
+.shopify-cohort-table caption { padding: 0 0 0.75rem; color: #948980; font-size: 0.76rem; text-align: left; }
+.custom-tool-strip { margin: 1.5rem 0 3rem; padding: 1.1rem; background: rgba(35,31,28,0.68); border: 1px solid rgba(255,238,224,0.09); border-radius: 0.9rem; }
 .observatory-live-counts { display: grid; grid-template-columns: auto 1fr 1fr; align-items: center; gap: 1rem; margin: 2.2rem 0 1rem; padding: 1rem 1.15rem; border: 1px solid rgba(255,238,224,0.12); border-radius: 1rem; background: rgba(35,31,28,0.72); }
 .observatory-live-counts > span:not(.observatory-live-label) { display: flex; align-items: baseline; gap: 0.45rem; color: var(--muted); }
 .observatory-live-counts strong { color: var(--accent-strong); font-size: 1.85rem; font-weight: 520; line-height: 1; }
@@ -1087,6 +1116,15 @@ th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color
   .editorial-page > .lede { margin-bottom: 3.2rem; }
   .editorial-page h2 { margin-top: 3.6rem; }
   .editorial-page .cta { padding: 1.4rem; }
+  .editorial-shopify-study { width: min(100% - 1.5rem, 68rem); }
+  .shopify-study-metrics { grid-template-columns: 1fr; margin-top: -0.8rem; }
+  .shopify-study-metrics > div { min-height: 0; }
+  .shopify-tool-group { grid-template-columns: 1fr; }
+  .agent-journey { grid-template-columns: 1fr; gap: 1rem; }
+  .editorial-page .agent-journey li { display: grid; grid-template-columns: 2.5rem 1fr; padding: 0 0 1rem; border-bottom: 1px solid rgba(255,238,224,0.08); }
+  .agent-journey li::after { display: none; }
+  .agent-journey li > span { margin: 0; }
+  .observatory-field-note > div > strong { float: none; display: block; margin: 0 0 1.2rem; }
   .editorial-faq > section:not(.cta) { padding: 1.2rem; }
 }
 

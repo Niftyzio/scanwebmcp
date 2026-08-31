@@ -175,6 +175,17 @@ export async function pollRuntimeToolRegistry(
   return latest;
 }
 
+/** Remote Chromium sessions can occasionally connect without exposing a
+ * queryable page registry. Retry only that ambiguous transport state; a
+ * witnessed zero is a valid measurement and a blocked dependency needs to
+ * remain visible rather than being hidden by retries. */
+export function shouldRetryUnmeasuredRemoteProbe(probe: WebMCPProbe): boolean {
+  return probe.ok
+    && probe.renderer === "playwright-remote"
+    && !probe.witnessAvailable
+    && probe.blockedRuntimeUrls.length === 0;
+}
+
 function probeFailure(error: string, renderer?: WebMCPProbe["renderer"]): WebMCPProbe {
   const inventory = buildWebMCPInventory([], new Map());
   return {
@@ -651,7 +662,14 @@ export async function probeWebMCP(input: string | string[]): Promise<WebMCPProbe
   if (canonicalUrls.length === 0) {
     return probeFailure(`preflight:${preflights.map((result) => result.error ?? `http_${result.status}`).join("+")}`);
   }
-  const playwright = await probeViaPlaywright(canonicalUrls);
+  let playwright = await probeViaPlaywright(canonicalUrls);
+  if (shouldRetryUnmeasuredRemoteProbe(playwright)) {
+    console.warn("[render] remote WebMCP witness unavailable; retrying the primary context in a fresh session");
+    const retry = await probeViaPlaywright(canonicalUrls.slice(0, 1));
+    if (retry.ok && (retry.witnessAvailable || retry.blockedRuntimeUrls.length > 0)) {
+      playwright = retry;
+    }
+  }
   if (playwright.ok) return playwright;
   // Surface the reason in ops logs — a scan that silently degrades to
   // Firecrawl hides remote-browser misconfiguration otherwise.
